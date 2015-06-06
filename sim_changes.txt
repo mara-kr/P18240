@@ -1,0 +1,8 @@
+Changes from perl script:
+
+-Note to user about forgetting to quit upon Ctrl+d removed.
+-help => print_help, since help is reserved in python.
+-Removed randomizing memory based on seed, used random.randint instead
+-print_state removed, now get_state (returns string that would be printed), includes trailing newline
+-fprint_regfile removed, now print_regfile (only prints to stdout)
+
