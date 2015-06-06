@@ -1,6 +1,9 @@
-import sys
-import getopt
+from optparse import OptionParser
+from getpass import getuser
+from datetime import datetime
+from sys import argv
 
+transcript = "" # transcript of every line printed
 #global variables
 uinst_str_keys = {
 # Microcode operations (i.e., FSM states)
@@ -172,11 +175,50 @@ menu = {
    'print'   : '^\s*print\s*$',
 }
 
+main();
 ########################
 # Main Subroutine 
 ########################
 
 def main():
-   args = sys.argv
-   version = 0;
-   
+   parser = OptionParser()
+   parser.add_option("-v", "--version", action = "store_true", 
+                     dest = "get_version", default = False)
+   parser.add_option("-r", "--run", action = "store_true",
+                     dest = "run_only", default = False)
+   parser.add_option("-m", "--memory", action = "store_true",
+                     dest = "randomize_memory", default = False)
+   parser.add_option("-s", "--seed", action = "store", type = "int"
+                     dest = "seed", default = 0)
+
+   (options, args) = parser.parse_args()
+   if (options.get_version):
+      print("version: " + str(version))
+      exit()
+
+   user = getuser()
+   date = datetime.now()
+
+   if (seed == 0):
+      #not strictly the same as perl, but we just need a default pseduo-rand seed
+      seed = str(date.second) + str(date.minute)
+
+   tran("User: " + user)
+   tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p"))
+   tran("Arguments: " + str(args))
+   tran("Seed: " + seed)
+
+   if (len(argv) < 2):
+      usage()
+
+
+def usage():
+   line = "./sim240 [list_file] [sim_file]"
+   tran(line)
+   print(line + "\n")
+   exit()
+
+# adds a new line to the transcript - line doesn't include \n
+def tran(line):
+   transcript += (line + "\n")
+
