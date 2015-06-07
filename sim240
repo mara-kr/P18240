@@ -813,7 +813,7 @@ sub cycle {
     if($cp_out->{re} eq 'MEM_RD') {
         $state{MDR} = $mem_data;
     }
-
+ 
 	# load condition codes
     if($cp_out->{load_CC} eq 'LOAD_CC') {
         foreach ('Z','N','C','V') {

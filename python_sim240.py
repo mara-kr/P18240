@@ -4,6 +4,9 @@ from datetime import datetime
 from sys import argv
 from re import match
 from random import randint
+
+# @TODO - change bs calls to take number as first arg, use int function!
+# i.e. int(hex_num, 16), hex(int), etc.
 # Globals
 version = "1.21py"
 
@@ -195,7 +198,6 @@ menu = {
    'get_reg' : '^\s*(\*|pc|sp|ir|mar|mdr|z|c|v|n|state|r[0-7*])\s*\?$',
    'set_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})\]\s*=\s*([0-9a-f]{1,4})$',   # m[10] = 0a10
    'get_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})(:([0-9a-f]{1,4}))?\]\s*\?$', # m[50]? ; mem[10:20]?
-   'print'   : '^\s*print\s*$',
 };
 
 # filehandles
@@ -278,8 +280,8 @@ def main():
    interface(sim_fh); #start taking input from user
    save_tran(); #save transcript
 
-   if (sim_fh != None): close(sim_fh);
-   close(list_fh);
+   if (sim_fh != None): sim_fh.close();
+   list_fh.close();
 
 def init():
    get_labels();
@@ -376,8 +378,6 @@ def interface(input_fh):
          matchObj = match(menu["get_mem"], line);
          fget_memory({"lo" : matchObj.group(2),
                       "hi" : matchObj.group(4)});
-      elif (match(menu["print"], line)):
-         print_tran_lpr();
       elif (match("^$", line)): # user just struck enter
          pass; # something needs to be here for python
       else:
@@ -565,7 +565,7 @@ def save(filename):
                 "lo" : '0',
                 "hi" : "ffff",
                 "zeros" : 0});
-   close(fh);
+   fh.close();
 
 def set_reg(reg_name, value):
    global state;
@@ -593,9 +593,364 @@ def get_reg(reg_name):
 
 def get_state():
    (Z,N,C,V) = (state["Z"], state["N"], state["C"], state["V"]);
-   
+   state = "%0.4d" % cycle;
+   state += " " * (6 - len(state["STATE"]));
+   state += "%s %s %s %s %s%s%s%s %s %s" % 
+            (state["STATE"], state["PC"], state["IR"], state["SP"], Z, N, C, V,
+               state["MAR"], state["MDR"]);
+   state += " " + str(state["regFile"]) + "\n";
+
+def print_regfile():
+   even = False;
+   for index in xrange(8):
+      value = state["regFile"][index];
+      tran_print("R%d: %s" % (index, value));
+      if (even):
+         tran_print("\n");
+      else:
+         tran_print("\t");
+      even = not even;
 
 
+def set_memory(addr, value):
+   addr_hex = to_4_digit_uc_hex(addr);
+   value_hex = to_4_digit_uc_hex(value);
+   memory[addr_hex] = value;
+
+
+def fget_memory(args):
+   if ("zeros" in args):
+      print_zeros = args["zeros"];
+   else:
+      print_zeros = True;
+   lo = hex(args["lo"]);
+   if ("hi" in args):
+      hi = args["hi"];
+   else:
+      hi = lo;
+
+   if (lo > hi):
+      tran_print("Did you mean mem[%s:%s]?" % (hi,lo));
+      return;
+
+   for index in xrange(lo, hi):
+      addr = ("%.4x" % (index)).upper();
+      if (addr in memory):
+         value = memory[addr];
+      else:
+         value = "0000";
+      while (not (value == "0000" and not print_zeros)):
+         value_no_regs = "%.4x" % (value & 0xffc0);
+         state_str = hex_to_state(value_no_regs);
+         rd = bs(hex(value), "5:3");
+         rs = bs(hex(value), "2:0");
+         tran_print("%s: %s %s %d %d" % (mem[addr], value, state_str, rd, rs));
+
+########################
+# Simulator Code
+########################
+
+def cycle():
+   # Control Path ###
+   cp_out = control():
+
+   ### Start of ALU ###
+   rf_selA = bs(hex(state["IR"]), "5:3");
+   rf_selB = bs(hex(state["IR"]), "2:0");
+
+   regA = state["regFile"][rf_selA];
+   regB = state["regFIle"][rf_selB];
+
+   inA = mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
+              "REG" : regA}, cp_out["srcA"]);
+   inB = mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
+              "REG" : regB}, cp_out["srcB"]);
+
+   alu_in = {"alu_op" : cp_out["alu_op"], "inA" : inA, "inB", inB};
+   alu_out = alu(alu_in);
+   ### End of ALU ###
+
+   ### Memory ###
+   mem_data = memory({"re" : cp_out["re"], "we" : cp_out["we"],
+                      "data" : state["MDR"], "addr" : state["MAR"]});
+
+   ### Sequential Logic ###
+   dest = cp_out["dest"];
+
+   global state;
+   if (dest != "NONE"):
+      if (dest == "REG"):
+         state["regFile"][rf_selA] = alu_out["alu_result"];
+      else:
+         state[dest] = alu_out["alu_result"];
+
+   # store memory output to MDR
+   if (cp_out["re"] == "MEM_RD"):
+      state["MDR"] = mem_data;
+
+   # load condition codes
+   if (cp_out["load_CC"] == "LOAD_CC"):
+      for flag in ["Z", "N", "C", "V"]:
+         state[flag] = alu_out[flag];
+
+   state["STATE"] = cp_out["next_control_state"];
+
+##################################################
+############# CONTROL PATH CODE ##################
+##################################################
+
+# Globals for control path
+IR_state = "";
+BRN_next = "";
+BRZ_next = "":
+BRC_next = "";
+BRV_next = "";
+
+nextState_logic = {
+   "FETCH" : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH1'],
+   "FETCH1": ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'FETCH2'],
+   "FETCH2": ['F_A',        'MDR', 'x',    'IR',    'NO_LOAD',    'NO_RD',    'NO_WR',    'DECODE'],
+   "DECODE": ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'NO_WR',    IR_state],
+   "LDI"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDI1'],
+   "LDI1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDI2'],
+   "LDI2"  : ['F_A',        'MDR', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "ADD"   : ['F_A_PLUS_B', 'REG', 'REG',  'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "SUB"   : ['F_A_MINUS_B','REG', 'REG',  'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "INCR"  : ['F_A_PLUS_1', 'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "DECR"  : ['F_A_MINUS_1','REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LDR"   : ['F_B',        'x',   'REG',  'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDR1'],
+   "LDR1"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDR2'],
+   "LDR2"  : ['F_A',        'MDR', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRA"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'BRA1'],
+   "BRA1"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRA2'],
+   "BRA2"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRN"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRN_next],
+   "BRN1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRN2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRN3'],
+   "BRN3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRZ"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRZ_next],
+   "BRZ1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRZ2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRZ3'],
+   "BRZ3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "STOP"  : ['F_A_MINUS_1','PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'STOP1'],
+   "STOP1" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'NO_WR',    'STOP1'], # same as above
+   "BRC"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRC_next],
+   "BRC1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRC2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRC3'],
+   "BRC3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRV"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRV_next],
+   "BRV1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "BRV2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRV3'],
+   "BRV3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "AND"   : ['F_A_AND_B',  'REG', 'REG',  'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "NOT"   : ['F_A_NOT',    'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "OR"    : ['F_A_OR_B',   'REG', 'REG',  'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "XOR"   : ['F_A_XOR_B',  'REG', 'REG',  'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "CMI"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'CMI1'],
+   "CMI1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'CMI2'],
+   "CMI2"  : ['F_A_MINUS_B','REG', 'MDR',  'NONE',  'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "CMR"   : ['F_A_MINUS_B','REG', 'REG',  'NONE',  'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "ASHR"  : ['F_A_ASHR',   'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LSHL"  : ['F_A_SHL',    'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LSHR"  : ['F_A_LSHR',   'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "ROL"   : ['F_A_ROL',    'REG', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "MOV"   : ['F_B',        'x',   'REG',  'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LDA"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDA1'],
+   "LDA1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDA2'],
+   "LDA2"  : ['F_A',        'MDR', 'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDA3'],
+   "LDA3"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDA4'],
+   "LDA4"  : ['F_A',        'MDR', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
+   "STA"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STA1'],
+   "STA1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'STA2'],
+   "STA2"  : ['F_A',        'MDR', 'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STA3'],
+   "STA3"  : ['F_B',        'x',   'REG',  'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STA4'],
+   "STA4"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'],
+   "STR"   : ['F_A',        'REG', 'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STR1'],
+   "STR1"  : ['F_B',        'x',   'REG',  'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STR2'],
+   "STR2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'],
+   "JSR"   : ['F_A_MINUS_1','SP',  'x',    'SP',    'NO_LOAD',    'NO_RD',    'NO_WR',    'JSR1'],
+   "JSR1"  : ['F_A',        'SP',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'JSR2'],
+   "JSR2"  : ['F_A_PLUS_1', 'PC',  'x',    'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'JSR3'],
+   "JSR3"  : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'MEM_WR',   'JSR4'],
+   "JSR4"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'JSR5'],
+   "JSR5"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LDSF"  : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDSF1'],
+   "LDSF1" : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDSF2'],
+   "LDSF2" : ['F_A_PLUS_B', 'MDR', 'SP',   'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDSF3'],
+   "LDSF3" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDSF4'],
+   "LDSF4" : ['F_A',        'MDR', 'x',    'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "LDSP"  : ['F_A',        'REG', 'x',    'SP',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "POP"   : ['F_A',        'SP',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'POP1'],
+   "POP1"  : ['F_A_PLUS_1', 'SP',  'x',    'SP',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'POP2'],
+   "POP2"  : ['F_A',        'MDR', 'x',    'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "PUSH"  : ['F_A_MINUS_1','SP',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'PUSH1'],
+   "PUSH1" : ['F_A',        'REG', 'x',    'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'PUSH2'],
+   "PUSH2" : ['F_A_MINUS_1','SP',  'x',    'SP',    'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'],
+   "RTN"   : ['F_A',        'SP',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'RTN1'],
+   "RTN1"  : ['F_A_PLUS_1', 'SP',  'x',    'SP',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'RTN2'],
+   "RTN2"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "STSF"  : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STSF1'],
+   "STSF1" : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'STSF2'],
+   "STSF2" : ['F_A_PLUS_B', 'MDR', 'SP',   'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STSF3'],
+   "STSF3" : ['F_A',        'REG', 'x',    'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STSF4'],
+   "STSF4" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'], # NOTE: bug exists is SV code. NO_LOAD exists twice. 
+   "ADDSP" : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'ADDSP1'],
+   "ADDSP1": ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'ADDSP2'],
+   "ADDSP2": ['F_A_PLUS_B', 'MDR', 'SP',   'SP',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "STSP"  : ['F_A',        'SP',  'x',    'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+   "NEG"   : ['F_A_NOT',    'REG', 'x',    'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'NEG1'],
+   "NEG1"  : ['F_A_PLUS_1', 'REG', 'x',    'REG',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
+};
+
+def control():
+
+   curr_state = state["STATE"];
+
+   global BRN_next;
+   global BRZ_next;
+   global BRC_next;
+   global BRV_next;
+   global IR_state;
+   BRN_next = "BRN2" if state["N"] else "BRN1";
+   BRZ_next = "BRZ2" if state["Z"] else "BRZ1";
+   BRC_next = "BRC2" if state["C"] else "BRC1";
+   BRV_next = "BRV2" if state["V"] else "BRV1";
+
+   IR_state = hex_to_state(state["IR"]);
+
+   output = nextState_logic[curr_state];
+
+   next_control_state =  output[7];
+
+   rv = {
+      "alu_op" : output[0],
+      "srcA" : output[1],
+      "srcB" : output[2],
+      "dest" : output[3],
+      "load_CC" : output[4],
+      "re" : output[5],
+      "we" : output[6],
+      "next_control_state" : next_control_state,
+   };
+
+   return rv;
+
+def alu(args):
+   opcode = args["alu_op"];
+   inA = args["inA"];
+   inB = args["inB"];
+
+   Z = 0;
+   C = 0;
+   N = 0;
+   V = 0;
+
+   if (opcode == "F_A"):
+      out = inA;
+   elif (opcode == "F_A_PLUS_1"):
+      out = bs(hex(inA+1), '15:0');
+      C = bs(hex(inA+1), 16);
+      V = not bs(inA, 15) & bs(out, 15);
+   elif (opcode == "F_A_PLUS_B"):
+      out = bs(hex(inA+inB), '15:0');
+      C = bs(hex(inA+inB), 16);
+      V = (bs(hex(inA),15) & bs(hex(inB),15) & !bs(hex(out),15)) | 
+          (!bs(hex(inA),15) & !bs(hex(inB),15) & bs(hex(out),15));
+   elif (opcode == "F_A_PLUS_B_1"):
+      out = bs(hex(inA + $inB + 1),'15:0');
+      C = bs(hex(inA + $inB + 1),16);
+      V = (bs(hex(inA),15) & bs(hex(inB),15) & !bs(hex(out),15)) | 
+          (!bs(hex(inA),15) & !bs(hex(inB),15) & bs(hex(out),15));
+   elif (opcode == "F_A_MINUS_B_1"):
+      out = bs(hex(inA - inB - 1),'15:0'); # A-B-1 (set carry below)
+      C = ((inB + 1) >= inA);
+      V = (bs(hex(inA),15) & bs(hex(inB),15) & !bs(hex(out),15)) | 
+          (!bs(hex(inA),15) & !bs(hex(inB),15) & bs(hex(out),15));
+   elif (opcode == "F_A_MINUS_B"):
+      out = bs(hex(inA - inB),'15:0'); # A-B (set carry below)
+      C = 1 if (inB >= inA) else 0;
+      V = (bs(hex(inA),15) & bs(hex(inB),15) & !bs(hex(out),15)) | 
+          (!bs(hex(inA),15) & !bs(hex(inB),15) & bs(hex(out),15));
+   elif (opcode == "F_A_MINUS_1"):
+      out = bs(hex(inA - 1), "15:0");
+      C = bs(hex(inA - 1), 16);
+      V = not bs(hex(inA),15) & bs(hex(out),15);
+   elif (opcode == "F_B"):
+      out = inB;
+   elif (opcode == "F_A_NOT"):
+      out = bs(hex(~inA), "15:0");
+   elif (opcode == "F_A_AND_B"):
+      out = inA & inB;
+   elif (opcode == "F_A_OR_B"):
+      out = inA | inB;
+   elif (opcode == "F_A_XOR_B"):
+      out = inA ^ inB;
+   elif (opcode == "F_A_SHL"):
+      C = bs(hex(inA << 1), 15);
+      out = bs(hex(inA << 1), "15:0");
+   elif (opcode == "F_A_ROL"):
+      out = (bs(hex(inA), "14:0") << 1) + state["C"];
+      C = bs(hex(inA), 15);
+   elif (opcode == "F_A_LSHR"):
+      C = bs(hex(inA), 0);
+      out = '0' + str(bs(hex(inA), "15:1"));
+   elif (opcode == "F_A_ASHR"):
+      C = bs(hex(inA), 0);
+      out = (bs(hex(inA),15) << 15) + bs(hex(inA), "15:1");
+   elif (opcode == "x"):
+      out = 0;
+      Z = N = C = V = 0;
+   else:
+      # TODO: probably should do something else like return 'x'
+      print("error: invalid alu opcode $opcode");
+
+   N = bs(hex(out), 15);
+   Z = 1 if (out == 0) else 0;
+
+   rv = {
+      "alu_result" : "%.4x" % out,
+      "Z" : Z,
+      "N" : N,
+      "C" : C,
+      "V" : V,
+   };
+
+   return rv;
+
+# Simulates a memory.
+# Arguments are specified in a hash:
+# If value for 're' key is 'MEM_RD', read from memory.
+# If value for 'we' key is 'MEM_WR', write to memory.
+# Reading and writing both use the value of the 'addr' key.
+# Writing writes the value of the 'data_in' key.
+# Return value:
+# Returns the data stored at 'addr' when reading; 0000 otherwise.
+def memory(args):
+   re = args["re"];
+   we = args["we"];
+   data_in = args["data"];
+   addr = args["addr"];
+
+   data_out = "0000"; # data_in would mimic bus more accurately...
+   if (re == "MEM_RD") and (addr in memory):
+      data_out = memory[addr];
+   if (we == "MEM_WR"):
+      memory[addr] = data_in;
+
+   return data_out;
+
+# Simulates a multiplexor. The inputs to be selected must be in a hash
+# TODO - maybe not necessary? Mimics hardware at cost of complexity
+def mux(inputs, sel):
+   if (sel == "x"):
+      return '0';
+
+   return inputs[sel];
+
+
+########################
+# Supporting Subroutines
+########################
 
 # adds a new line to the transcript - line doesn't include \n
 def tran(line):
@@ -604,6 +959,50 @@ def tran(line):
 
 # add the string to the transcript and print to file
 def tran_print(line):
-   tran(line + "\n");
+   tran(line + "\n"); #@fix might be double new lines in cases
    print(line);
 
+# Bitslice subroutine.
+# First argument is a number, second argument is a string which indicates
+# which bits you want to extract. This follows verilog format
+# That is, '5' will extract bit 5, '5:2' will extract bits 5 to 2.
+# The return value is shifted down so that the least significant selected
+# bit moves down to the least significant position.
+def bs(bits, indices):
+   matchObj = match("(\d+):(\d+)", indices);
+   if (matchObj != None):
+      hi = matchObj.group(1);
+      lo = matchObj.group(2);
+      return (bits >> lo) & ((2 << (hi - lo)) - 1);
+   else:
+      return (bits >> (match("(\d+)", indices).group(1))) & 1;
+
+# Takes a hexadecimal number in canonical form and outputs the
+# string corresponding to that opcode.
+def hex_to_state(hex_value):
+   bin_val = bin(int(hex_value, 16));
+   bin_val = bin_val[2:]; #removes starting '0b'
+   while (len(bin_val) < 10): #adds starting zeros
+      bin_val = "0" + bin_val;
+
+   key = bin_val[0:2] + "_" + bin_val[2:6] + "_" + bin_val[6:10];
+   if (key in uinst_bin_keys):
+      state = uinst_bin_keys[key];
+   else:
+      tran_print("Invalid binary code in IR: %s" % key);
+      state = 'FETCH';
+   return state;
+
+def save_tran():
+   try:
+      tran_fh = open("transcript.txt", "w");
+   except:
+      exit();
+   tran_fh.write(transcript);
+   tran_fh.close();
+
+# Takes a hexadecimal number as input and outputs a canonical form
+# The cacnonical form is a 4 digit uppercase hexadecimal number
+# Input can be 1 to 4 digits with any case.
+def to_4_digit_uc_hex(num):
+   return ("%.4x" % num).upper();

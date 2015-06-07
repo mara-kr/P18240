@@ -5,4 +5,7 @@ Changes from perl script:
 -Removed randomizing memory based on seed, used random.randint instead
 -print_state removed, now get_state (returns string that would be printed), includes trailing newline
 -fprint_regfile removed, now print_regfile (only prints to stdout)
-
+-bs returns int, takes number as string
+-mux only takes dictionary as input (no longer takes array)
+-removed print_tran_lpr and "print" command (it wasn't in help text, likely
+ never got used)
