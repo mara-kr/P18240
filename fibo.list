@@ -1,0 +1,20 @@
+addr data  label   opcode  operands
+---- ----  -----   ------  --------
+0000 0C00          LDI     R0 
+0001 0000                  $0 
+0002 3C00          LDSP    R0 
+0003 2800          BRA     
+0004 0100                  start 
+0100 0C00  start   LDI     R0 
+0101 0000                  $0 
+0102 0C09          LDI     R1 
+0103 0001                  $1 
+0104 4409  loop    CMI     R1 
+0105 000D                  $D 
+0106 2A00          BRZ     
+0107 010C                  done 
+0108 0E01          ADD     R0 R1 
+0109 0E08          ADD     R1 R0 
+010A 2800          BRA     
+010B 0104                  loop 
+010C 3000  done    STOP    
