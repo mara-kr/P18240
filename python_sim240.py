@@ -569,7 +569,7 @@ def run(num, print_per_requested):
 def step():
    cycle(); # @fix should just be do-while loop, doesn't exist in python
    if (print_per == "u"): print(get_state());
-   while (not match(state["STATE"], "^(STOP1|FETCH)$")):
+   while (state["STATE"] != "FETCH" and state["STATE"] != "STOP1"):
       cycle();
       if (print_per == "u"): print(get_state());
 
@@ -693,7 +693,8 @@ def get_state():
                                             state["IR"], state["SP"], 
                                             Z, N, C, V,
                                             state["MAR"], state["MDR"]);
-   state_info += " " + str(state["regFile"]) + "\n";
+   for reg in state["regFile"]:
+      state_info += " " + reg;
    return state_info;
 
 def print_regfile():
@@ -755,8 +756,8 @@ def cycle():
    rf_selA = bs(int(state["IR"],16), "5:3");
    rf_selB = bs(int(state["IR"],16), "2:0");
 
-   regA = int(state["regFile"][rf_selA],16);
-   regB = int(state["regFile"][rf_selB],16);
+   regA = state["regFile"][rf_selA]; #strings, since mux could select this
+   regB = state["regFile"][rf_selB];
 
    #@bug, mux call returns int
    inA = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
@@ -792,8 +793,6 @@ def cycle():
          state[flag] = alu_out[flag];
 
    state["STATE"] = cp_out["next_control_state"];
-   print("state" + state["STATE"]);
-   print("IR " + IR_state + " a " + nextState_logic["DECODE"][7]);
 
    global cycle_num;
    cycle_num += 1;
@@ -816,6 +815,10 @@ def control():
    BRV_next = "BRV2" if state["V"] else "BRV1";
    IR_state = hex_to_state(state["IR"]);
    nextState_logic["DECODE"][7] = IR_state; #@FIX, IR_state wasn't updating
+   nextState_logic["BRN"][7] = BRN_next;
+   nextState_logic["BRZ"][7] = BRZ_next;
+   nextState_logic["BRV"][7] = BRV_next;
+   nextState_logic["BRC"][7] = BRC_next;
    curr_state = state["STATE"];
 
    output = nextState_logic[curr_state];
@@ -977,14 +980,13 @@ def bs(bits, indices):
 # Takes a hexadecimal number in canonical form and outputs the
 # string corresponding to that opcode.
 def hex_to_state(hex_value):
-   print(hex_value);
    bin_val = bin(int(hex_value, 16));
    bin_val = bin_val[2:]; #removes starting '0b'
    while (len(bin_val) < 16): #adds starting zeros
       bin_val = "0" + bin_val;
 
    key = bin_val[0:2] + "_" + bin_val[2:6] + "_" + bin_val[6:10];
-   print(key);
+
    if (key in uinst_bin_keys):
       state = uinst_bin_keys[key];
    else:
