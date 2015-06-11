@@ -428,6 +428,7 @@ def interface(input_fh):
       else:
          line = raw_input("> ");
 
+      #@FIX missing some commands
       # assume user input is valid until discovered not to be
       valid = True;
       if (match(menu["quit"], line)): 
@@ -757,6 +758,7 @@ def cycle():
    regA = int(state["regFile"][rf_selA],16);
    regB = int(state["regFile"][rf_selB],16);
 
+   #@bug, mux call returns int
    inA = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
               "REG" : regA}, cp_out["srcA"]), 16);
    inB = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
@@ -790,6 +792,8 @@ def cycle():
          state[flag] = alu_out[flag];
 
    state["STATE"] = cp_out["next_control_state"];
+   print("state" + state["STATE"]);
+   print("IR " + IR_state + " a " + nextState_logic["DECODE"][7]);
 
    global cycle_num;
    cycle_num += 1;
@@ -800,23 +804,21 @@ def cycle():
 
 def control():
 
-   curr_state = state["STATE"];
-
    global BRN_next;
    global BRZ_next;
    global BRC_next;
    global BRV_next;
    global IR_state;
+   global nextState_logic;
    BRN_next = "BRN2" if state["N"] else "BRN1";
    BRZ_next = "BRZ2" if state["Z"] else "BRZ1";
    BRC_next = "BRC2" if state["C"] else "BRC1";
    BRV_next = "BRV2" if state["V"] else "BRV1";
-
    IR_state = hex_to_state(state["IR"]);
+   nextState_logic["DECODE"][7] = IR_state; #@FIX, IR_state wasn't updating
+   curr_state = state["STATE"];
 
    output = nextState_logic[curr_state];
-
-   next_control_state =  output[7];
 
    rv = {
       "alu_op" : output[0],
@@ -826,7 +828,7 @@ def control():
       "load_CC" : output[4],
       "re" : output[5],
       "we" : output[6],
-      "next_control_state" : next_control_state,
+      "next_control_state" : output[7],
    };
 
    return rv;
@@ -975,12 +977,14 @@ def bs(bits, indices):
 # Takes a hexadecimal number in canonical form and outputs the
 # string corresponding to that opcode.
 def hex_to_state(hex_value):
+   print(hex_value);
    bin_val = bin(int(hex_value, 16));
    bin_val = bin_val[2:]; #removes starting '0b'
-   while (len(bin_val) < 10): #adds starting zeros
+   while (len(bin_val) < 16): #adds starting zeros
       bin_val = "0" + bin_val;
 
    key = bin_val[0:2] + "_" + bin_val[2:6] + "_" + bin_val[6:10];
+   print(key);
    if (key in uinst_bin_keys):
       state = uinst_bin_keys[key];
    else:
