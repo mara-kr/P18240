@@ -3,6 +3,7 @@ from getpass import getuser
 from datetime import datetime
 from sys import argv
 from re import match
+import re
 from random import randint
 
 # @TODO - change bs calls to take number as first arg, use int function!
@@ -431,49 +432,50 @@ def interface(input_fh):
       #@FIX missing some commands
       # assume user input is valid until discovered not to be
       valid = True;
-      if (match(menu["quit"], line)): 
+      line = line.upper(); #should be independent of case
+      if (match(menu["quit"], line, re.IGNORECASE)): 
          done = True;
-      elif (match(menu["help"], line)): 
-         print_help();
-      elif (match(menu["run"], line)):
-         matchObj = match(menu["run"], line); #@fix can't assign inside if
+      elif (match(menu["help"], line, re.IGNORECASE)): 
+         print_help();#@fix can't assign inside if
+      elif (match(menu["run"], line, re.IGNORECASE)):
+         matchObj = match(menu["run"], line, re.IGNORECASE);
          run(matchObj.group(2), matchObj.group(3));
-      elif (match(menu["step"], line)):
+      elif (match(menu["step"], line, re.IGNORECASE)):
          if (print_per == "i"): tran_print(wide_header);
          step();
          if (print_per == "i"): print(get_state());
-      elif (match(menu["ustep"], line)):
+      elif (match(menu["ustep"], line, re.IGNORECASE)):
          if (print_per == "u"): tran_print(wide_header);
          cycle();
          if (print_per == "u"): print(get_state());
-      elif (match(menu["break"], line)):
-         matchObj = match(menu["break"], line);
+      elif (match(menu["break"], line, re.IGNORECASE)):
+         matchObj = match(menu["break"], line, re.IGNORECASE);
          set_breakpoint(matchObj.group(1));
-      elif (match(menu["clear"], line)):
-         matchObj = match(menu["clear"], line);
+      elif (match(menu["clear"], line, re.IGNORECASE)):
+         matchObj = match(menu["clear"], line, re.IGNORECASE);
          clear_breakpoint(matchObj.group(1));
-      elif (match(menu["lsbrk"], line)):
+      elif (match(menu["lsbrk"], line, re.IGNORECASE)):
          list_breakpoints();
-      elif (match(menu["load"], line)):
-         matchObj = match(menu["load"], line);
+      elif (match(menu["load"], line, re.IGNORECASE)):
+         matchObj = match(menu["load"], line, re.IGNORECASE);
          load(matchObj.group(1));
-      elif (match(menu["save"], line)):
-         matchObj = match(menu["save"], line);
+      elif (match(menu["save"], line, re.IGNORECASE)):
+         matchObj = match(menu["save"], line, re.IGNORECASE);
          save(matchObj.group(1));
-      elif (match(menu["set_reg"], line)):
-         matchObj = match(menu["set_reg"], line);
+      elif (match(menu["set_reg"], line, re.IGNORECASE)):
+         matchObj = match(menu["set_reg"], line, re.IGNORECASE);
          set_reg(matchObj.group(1), matchObj.group(2));
-      elif (match(menu["get_reg"], line)):
-         matchObj = match(menu["get_reg"], line);
+      elif (match(menu["get_reg"], line, re.IGNORECASE)):
+         matchObj = match(menu["get_reg"], line, re.IGNORECASE);
          get_reg(matchObj.group(1));
-      elif (match(menu["set_mem"], line)):
-         matchObj = match(menu["set_mem"], line);
+      elif (match(menu["set_mem"], line, re.IGNORECASE)):
+         matchObj = match(menu["set_mem"], line, re.IGNORECASE);
          set_memory(matchObj.group(2), matchObj.group(3));
-      elif (match(menu["get_mem"], line)):
-         matchObj = match(menu["get_mem"], line);
+      elif (match(menu["get_mem"], line, re.IGNORECASE)):
+         matchObj = match(menu["get_mem"], line, re.IGNORECASE);
          fget_memory({"lo" : matchObj.group(2),
                       "hi" : matchObj.group(4)});
-      elif (match("^$", line)): # user just struck enter
+      elif (match("^$", line, re.IGNORECASE)): # user just struck enter
          pass; # something needs to be here for python
       else:
          valid = False;
@@ -489,9 +491,9 @@ def print_help():
    help_msg += "step,s                     Simulate one instruction.\n";
    help_msg += "ustep,u                    Simulate one micro-instruction.\n";
    help_msg += "run,r [n]                  Simulate the next n instructions.\n";
-   help_msg += "break [addr/label]         Set a breakpoint for instruction located at [addr] or [label].\n";
+   help_msg += "break [addr/label]         Set a breakpoint at [addr] or [label].\n";
    help_msg += "lsbrk                      List all of the breakpoints set.\n";
-   help_msg += "clear [addr/label/*]       Clear a breakpoint set for [addr], [label], or clear all.\n";
+   help_msg += "clear [addr/label/*]       Clear breakpoint at [addr], [label], or clear all.\n";
    help_msg += "reset                      Reset the processor to initial state.\n";
    help_msg += "save [file]                Save the current state to a file.\n";
    help_msg += "load [file]                Load the state from a given file.\n";
@@ -505,7 +507,6 @@ def print_help():
    help_msg += "You may view memory like so: m[00A0]? or with a range: m[0:A]?\n";
    help_msg += "\n";
    help_msg += "Note: All constants are interpreted as hexadecimal.\n";
-   help_msg += "\n";
    tran_print(help_msg);
  
 
@@ -663,27 +664,30 @@ def save(filename):
 
 def set_reg(reg_name, value):
    global state;
-   if (match('^R([0-7])$', reg_name)):
-      state["regFile"][match('^R([0-7])$', reg_name).group(1)] = value;
+   reg_name = reg_name.upper(); #keys stored as uppercase
+   value = to_4_digit_uc_hex(int(value,16));
+   if (match('^R([0-7])$', reg_name, re.IGNORECASE)):
+      matchObj = match('^R([0-7])$', reg_name, re.IGNORECASE);
+      state["regFile"][int(matchObj.group(1))] = value;
    elif (match("^[ZNCV]$", reg_name)):
       if (match("^[01]$", reg_name)):
          state[reg_name] = value;
       else:
          tran_print("Value must be 0 or 1 for this register.");
    else:
-      state[reg_name] = to_4_digit_uc_hex(value);
+      state[reg_name] = to_4_digit_uc_hex(int(value,16));
 
 def get_reg(reg_name):
    if (reg_name == "*"):
       tran_print(get_state());
    elif (reg_name == "R*"):
       print_regfile();
-   elif (match("R([0-7])", reg_name)):
-      reg_num = match("R([0-7])", reg_name).group(1);
-      tran_print("R%d: %s\n" % (reg_num, state["regFile"][reg_num]));
+   elif (match("R([0-7])", reg_name, re.IGNORECASE)):
+      reg_num = int(match("R([0-7])", reg_name, re.IGNORECASE).group(1));
+      tran_print("R%d: %s" % (reg_num, state["regFile"][reg_num]));
    else:
       value = state[reg_name];
-      tran_print("%s: %s\n" % (reg_name, value));
+      tran_print("%s: %s" % (reg_name, value));
 
 def get_state():
    (Z,N,C,V) = (state["Z"], state["N"], state["C"], state["V"]);
@@ -699,49 +703,49 @@ def get_state():
 
 def print_regfile():
    even = False;
-   for index in xrange(8):
+   for index in xrange(0,8,2):
       value = state["regFile"][index];
-      tran_print("R%d: %s" % (index, value));
-      if (even):
-         tran_print("\n");
-      else:
-         tran_print("\t");
-      even = not even;
+      reg_str = "R%d: %s \t" % (index, value);
+      value = state["regFile"][index+1];
+      reg_str += "R%d: %s" %(index+1, value);
+      tran_print(reg_str);
 
 
 def set_memory(addr, value):
-   addr_hex = to_4_digit_uc_hex(addr);
-   value_hex = to_4_digit_uc_hex(value);
+   addr_hex = addr.upper();
+   value_hex = value.upper();
    memory[addr_hex] = value;
 
 
+# Works as intended
 def fget_memory(args):
    if ("zeros" in args):
       print_zeros = args["zeros"];
    else:
       print_zeros = True;
-   lo = hex(args["lo"]);
-   if ("hi" in args):
-      hi = args["hi"];
+   lo = int(args["lo"], 16);
+   if ("hi" in args and args["hi"] != None):
+      hi = int(args["hi"],16);
    else:
       hi = lo;
 
    if (lo > hi):
-      tran_print("Did you mean mem[%s:%s]?" % (hi,lo));
+      tran_print("Did you mean mem[%x:%x]?" % (hi,lo));
       return;
 
-   for index in xrange(lo, hi):
+   for index in xrange(lo, hi+1):
       addr = ("%.4x" % (index)).upper();
       if (addr in memory):
          value = memory[addr];
       else:
          value = "0000";
-      while (not (value == "0000" and not print_zeros)):
-         value_no_regs = "%.4x" % (value & 0xffc0);
+      if (not (value == "0000" and not print_zeros)):
+         value_no_regs = "%.4x" % (int(value,16) & 0xffc0);
          state_str = hex_to_state(value_no_regs);
-         rd = bs(hex(value), "5:3");
-         rs = bs(hex(value), "2:0");
-         tran_print("%s: %s %s %d %d" % (mem[addr], value, state_str, rd, rs));
+         rd = bs(int(value,16), "5:3");
+         rs = bs(int(value,16), "2:0");
+         tran_print("mem[%s]: %s %s %d %d" % (addr, value, 
+                                         state_str, rd, rs));
 
 ########################
 # Simulator Code
@@ -776,7 +780,7 @@ def cycle():
    ### Sequential Logic ###
    dest = cp_out["dest"];
 
-   global state;
+   #global state;
    if (dest != "NONE"):
       if (dest == "REG"):
          state["regFile"][rf_selA] = alu_out["alu_result"];
@@ -792,6 +796,7 @@ def cycle():
       for flag in ["Z", "N", "C", "V"]:
          state[flag] = alu_out[flag];
 
+   #print(state["Z"], alu_out["Z"], cp_out["load_CC"]);
    state["STATE"] = cp_out["next_control_state"];
 
    global cycle_num;
@@ -803,22 +808,14 @@ def cycle():
 
 def control():
 
-   global BRN_next;
-   global BRZ_next;
-   global BRC_next;
-   global BRV_next;
    global IR_state;
    global nextState_logic;
-   BRN_next = "BRN2" if state["N"] else "BRN1";
-   BRZ_next = "BRZ2" if state["Z"] else "BRZ1";
-   BRC_next = "BRC2" if state["C"] else "BRC1";
-   BRV_next = "BRV2" if state["V"] else "BRV1";
    IR_state = hex_to_state(state["IR"]);
    nextState_logic["DECODE"][7] = IR_state; #@FIX, IR_state wasn't updating
-   nextState_logic["BRN"][7] = BRN_next;
-   nextState_logic["BRZ"][7] = BRZ_next;
-   nextState_logic["BRV"][7] = BRV_next;
-   nextState_logic["BRC"][7] = BRC_next;
+   nextState_logic["BRN"][7] = "BRN2" if int(state["N"]) else "BRN1";
+   nextState_logic["BRZ"][7] = "BRZ2" if int(state["Z"]) else "BRZ1";
+   nextState_logic["BRV"][7] = "BRV2" if int(state["V"]) else "BRV1";
+   nextState_logic["BRC"][7] = "BRC2" if int(state["C"]) else "BRC1";
    curr_state = state["STATE"];
 
    output = nextState_logic[curr_state];
@@ -848,6 +845,7 @@ def alu(args):
    N = 0;
    V = 0;
 
+   # @BUG V FLAG IS INCORRECT
    if (opcode == "F_A"):
       out = inA;
    elif (opcode == "F_A_PLUS_1"):
@@ -907,7 +905,7 @@ def alu(args):
    Z = 1 if (out == 0) else 0;
 
    rv = {
-      "alu_result" : "%.4x" % out,
+      "alu_result" : ("%.4x" % out).upper(),
       "Z" : str(Z),
       "N" : str(N),
       "C" : str(C),
