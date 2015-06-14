@@ -5,6 +5,7 @@ from sys import argv
 from re import match
 import re
 from random import randint
+from string import join
 
 # @TODO - change bs calls to take number as first arg, use int function!
 # i.e. int(hex_num, 16), hex(int), etc.
@@ -18,8 +19,9 @@ transcript = ""; # holds transcript of every line printed
 
 randomize_memory = False; # flag that randomizes the memory
 run_only = False; # flag that just does "run, quit"
+create_transcript = False; # flag that creates transcript of events if set
 
-wide_header = "Cycle STATE PC   IR   SP   ZNCV MAR  MDR  R0   R1   R2   R3   R4   R5   R6   R7\n";
+wide_header = "Cycle STATE PC   IR   SP   ZNCV MAR  MDR  R0   R1   R2   R3   R4   R5   R6   R7";
 
 # print_per is a variable which determines when the simulator prints the state
 # to the console.
@@ -321,6 +323,8 @@ def main():
                      dest = "run_only", default = False);
    parser.add_option("-m", "--memory", action = "store_true",
                      dest = "randomize_memory", default = False);
+   parser.add_option("-t", "--transcript", action = "store_true",
+                     dest = "create_transcript", default = False);
    
    (options, args) = parser.parse_args();
    if (options.get_version):
@@ -333,15 +337,17 @@ def main():
    global randomize_memory;
    randomize_memory = options.randomize_memory;
 
+   global create_transcript;
+   create_transcript = options.create_transcript;
    global user;
    global date;
    user = getuser();
    date = datetime.now();
 
 
-   tran("User: " + user);
-   tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p"));
-   tran("Arguments: " + str(args));
+   tran("User: " + user + "\n");
+   tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p") + "\n");
+   tran("Arguments: " + str(args) + "\n\n");
 
    if (len(args) < 1): #args takes out flags and argv[0]
       usage();
@@ -426,28 +432,32 @@ def interface(input_fh):
           if (len(line) == 0):
             taking_user_input = True;
             continue;
+          tran_print(line + "\n");
       else:
          line = raw_input("> ");
+         tran(line + "\n");
 
       #@FIX missing some commands
       # assume user input is valid until discovered not to be
       valid = True;
-      line = line.upper(); #should be independent of case
+      #line = line.upper(); #should be independent of case
       if (match(menu["quit"], line, re.IGNORECASE)): 
          done = True;
       elif (match(menu["help"], line, re.IGNORECASE)): 
          print_help();#@fix can't assign inside if
+      elif (match(menu["reset"], line, re.IGNORECASE)):
+         init();
       elif (match(menu["run"], line, re.IGNORECASE)):
          matchObj = match(menu["run"], line, re.IGNORECASE);
          run(matchObj.group(2), matchObj.group(3));
       elif (match(menu["step"], line, re.IGNORECASE)):
          if (print_per == "i"): tran_print(wide_header);
          step();
-         if (print_per == "i"): print(get_state());
+         if (print_per == "i"): tran_print(get_state());
       elif (match(menu["ustep"], line, re.IGNORECASE)):
          if (print_per == "u"): tran_print(wide_header);
          cycle();
-         if (print_per == "u"): print(get_state());
+         if (print_per == "u"): tran_print(get_state());
       elif (match(menu["break"], line, re.IGNORECASE)):
          matchObj = match(menu["break"], line, re.IGNORECASE);
          set_breakpoint(matchObj.group(1));
@@ -556,7 +566,7 @@ def run(num, print_per_requested):
 
    for i in xrange(num):
       step();
-      if (print_per == "i"): print(get_state());
+      if (print_per == "i"): tran_print(get_state());
       if (state["PC"] in breakpoints):
          tran_print("Hit breakpoint at " + state["PC"] + ".\n");
          break;
@@ -569,10 +579,10 @@ def run(num, print_per_requested):
 # Simulate one instruction
 def step():
    cycle(); # @fix should just be do-while loop, doesn't exist in python
-   if (print_per == "u"): print(get_state());
+   if (print_per == "u"): tran_print(get_state());
    while (state["STATE"] != "FETCH" and state["STATE"] != "STOP1"):
       cycle();
-      if (print_per == "u"): print(get_state());
+      if (print_per == "u"): tran_print(get_state());
 
 # Set a break point at a given address of label.
 # Any thing which matches a hex value (e.g. a, 0B, etc) is interpreted
@@ -585,8 +595,8 @@ def set_breakpoint(arg):
    if (match("^'(\w+)'$", arg)):
       label = match("^'(\w+)'$", arg).group(1);
       is_label = True;
-   elif (match("^[0-9a-f]{1,4}$"), arg):
-      addr = to_4_digit_uc_hex(arg);
+   elif (match("^[0-9a-f]{1,4}$", arg, re.IGNORECASE)):
+      addr = to_4_digit_uc_hex(int(arg,16));
    else:
       is_label = True;
       label = arg;
@@ -608,8 +618,8 @@ def clear_breakpoint(arg):
    if (match("^'(\w+)'$", arg)):
       label = match("^'(\w+)'$", arg).group(1);
       is_label = True;
-   elif (match("^[0-9a-f]{1,4}$"), arg):
-      addr = to_4_digit_uc_hex(arg);
+   elif (match("^[0-9a-f]{1,4}$", arg, re.IGNORECASE)):
+      addr = to_4_digit_uc_hex(int(arg,16));
    elif (arg == "*"):
       clear_all = True;
    else:
@@ -653,8 +663,8 @@ def save(filename):
    fh.write("Breakpoints:\n");
    for key in breakpoints:
       fh.write(key + "\n");
-   fh.write("State:\n");
-   fh.write(get_state());
+   fh.write("\nState:\n");
+   fh.write(get_state() + "\n\n");
    fh.write("Memory:\n");
    fget_memory({"fh" : fh,
                 "lo" : '0',
@@ -678,6 +688,7 @@ def set_reg(reg_name, value):
       state[reg_name] = to_4_digit_uc_hex(int(value,16));
 
 def get_reg(reg_name):
+   reg_name = reg_name.upper();
    if (reg_name == "*"):
       tran_print(get_state());
    elif (reg_name == "R*"):
@@ -744,8 +755,12 @@ def fget_memory(args):
          state_str = hex_to_state(value_no_regs);
          rd = bs(int(value,16), "5:3");
          rs = bs(int(value,16), "2:0");
-         tran_print("mem[%s]: %s %s %d %d" % (addr, value, 
-                                         state_str, rd, rs));
+         mem_val = "mem[%s]: %s %s %d %d" % (addr, value, 
+                                         state_str, rd, rs);
+         if ("fh" in args):
+            args["fh"].write(mem_val + "\n");
+         else:
+            tran_print(mem_val);
 
 ########################
 # Simulator Code
@@ -771,7 +786,7 @@ def cycle():
 
    alu_in = {"alu_op" : cp_out["alu_op"], "inA" : inA, "inB" : inB};
    alu_out = alu(alu_in);
-   ### End of ALU ###
+   ### End of ALU ##
 
    ### Memory ###
    mem_data = memory_sim({"re" : cp_out["re"], "we" : cp_out["we"], 
@@ -952,7 +967,8 @@ def mux(inputs, sel):
 # adds a new line to the transcript - line doesn't include \n
 def tran(line):
    global transcript;
-   transcript += (line);
+   if (create_transcript):
+      transcript += (line);
 
 # add the string to the transcript and print to file
 def tran_print(line):
@@ -993,12 +1009,13 @@ def hex_to_state(hex_value):
    return state;
 
 def save_tran():
-   try:
-      tran_fh = open("transcript.txt", "w");
-   except:
-      exit();
-   tran_fh.write(transcript);
-   tran_fh.close();
+   if (create_transcript):
+      try:
+         tran_fh = open("transcript.txt", "w");
+      except:
+         exit();
+      tran_fh.write(transcript);
+      tran_fh.close();
 
 # Takes a hexadecimal number as input and outputs a canonical form
 # The cacnonical form is a 4 digit uppercase hexadecimal number

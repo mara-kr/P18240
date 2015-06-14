@@ -1,0 +1,8 @@
+-consider a way to check state for test suite
+-compare state of simulator to state file, print out diff
+-implement testing suite for simulator (Python script to run series of dot list files)
+-flag for piping output from assembler to simulator
+-email Nace on Monday with progress
+-memory is always random
+-think about ways to make autolab easier
+-Flag for creating transcript
