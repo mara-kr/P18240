@@ -6,9 +6,8 @@ from re import match
 import re
 from random import randint
 from string import join
+import signal
 
-# @TODO - change bs calls to take number as first arg, use int function!
-# i.e. int(hex_num, 16), hex(int), etc.
 # Globals
 version = "1.21py"
 
@@ -434,7 +433,11 @@ def interface(input_fh):
             continue;
           tran_print(line + "\n");
       else:
-         line = raw_input("> ");
+         try:
+            line = raw_input("> ");
+         except EOFError:
+            print("Unexpected input, did you forget to quit?");
+            exit();
          tran(line + "\n");
 
       #@FIX missing some commands
@@ -1023,4 +1026,9 @@ def save_tran():
 def to_4_digit_uc_hex(num):
    return ("%.4x" % num).upper();
 
+def sigint_handler(signal, frame):
+   print("Unexpected input, did you forget to quit?");
+   exit();
+
+signal.signal(signal.SIGINT, signal_handler);
 main();
