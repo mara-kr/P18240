@@ -93,7 +93,7 @@ uinst_str_keys = {
    'DECR'   : '00_0101_1000',
    'NEG'    : '00_0100_1000',
    'NEG1'   : '00_0100_1001',
- 
+
 # Logical operations: AND, NOT, OR, XOR
    'AND'    : '00_0110_1000',
    'NOT'    : '00_0110_0000',
@@ -301,7 +301,7 @@ nextState_logic = {
    "STSF1" : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'STSF2'],
    "STSF2" : ['F_A_PLUS_B', 'MDR', 'SP',   'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STSF3'],
    "STSF3" : ['F_A',        'REG', 'x',    'MDR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'STSF4'],
-   "STSF4" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'], # NOTE: bug exists is SV code. NO_LOAD exists twice. 
+   "STSF4" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'MEM_WR',   'FETCH'], # NOTE: bug exists is SV code. NO_LOAD exists twice.
    "ADDSP" : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'ADDSP1'],
    "ADDSP1": ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'ADDSP2'],
    "ADDSP2": ['F_A_PLUS_B', 'MDR', 'SP',   'SP',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
@@ -311,12 +311,12 @@ nextState_logic = {
 };
 
 ########################
-# Main Subroutine 
+# Main Subroutine
 ########################
 
 def main():
    parser = OptionParser();
-   parser.add_option("-v", "--version", action = "store_true", 
+   parser.add_option("-v", "--version", action = "store_true",
                      dest = "get_version", default = False);
    parser.add_option("-r", "--run", action = "store_true",
                      dest = "run_only", default = False);
@@ -324,7 +324,7 @@ def main():
                      dest = "randomize_memory", default = False);
    parser.add_option("-t", "--transcript", action = "store_true",
                      dest = "create_transcript", default = False);
-   
+
    (options, args) = parser.parse_args();
    if (options.get_version):
       print("version: " + str(version));
@@ -361,14 +361,14 @@ def main():
       except:
          print("Failed to open sim_file\n");
          exit();
-   
+
    global list_fh;
    try:
       list_fh = open(list_filename, "r");
    except:
       print("Failed to open list_file");
       exit();
-   
+
    # read all lines from list_fh, store in array, remove first 2 lines
    global list_lines;
    list_lines = list_fh.readlines();
@@ -436,7 +436,7 @@ def interface(input_fh):
          try:
             line = raw_input("> ");
          except EOFError:
-            print("Unexpected input, did you forget to quit?");
+            print("\nUnexpected input, did you forget to quit?");
             exit();
          tran(line + "\n");
 
@@ -444,9 +444,9 @@ def interface(input_fh):
       # assume user input is valid until discovered not to be
       valid = True;
       #line = line.upper(); #should be independent of case
-      if (match(menu["quit"], line, re.IGNORECASE)): 
+      if (match(menu["quit"], line, re.IGNORECASE)):
          done = True;
-      elif (match(menu["help"], line, re.IGNORECASE)): 
+      elif (match(menu["help"], line, re.IGNORECASE)):
          print_help();#@fix can't assign inside if
       elif (match(menu["reset"], line, re.IGNORECASE)):
          init();
@@ -521,7 +521,7 @@ def print_help():
    help_msg += "\n";
    help_msg += "Note: All constants are interpreted as hexadecimal.\n";
    tran_print(help_msg);
- 
+
 
 def init_p18240():
    global cycle_num;
@@ -546,7 +546,8 @@ def init_memory():
    global randomize_memory;
    if (randomize_memory):
       for addr in xrange(1 << 16):
-         data = randint(0, int_max);
+         data = to_4_digit_uc_hex(randint(0, int_max));
+         addr = to_4_digit_uc_hex(addr);
          set_memory(addr, data);
 
    global list_lines;
@@ -561,7 +562,10 @@ def init_memory():
 # In either case, the exception is to stop
 # at breakpoints or the STOP microinstruction
 def run(num, print_per_requested):
-   if (not num): num = (1<<32);
+   if (not num): 
+      num = (1<<32);
+   else:
+      num = int(num);
    global print_per;
    print_per_tmp = print_per;
    if (print_per_requested): print_per = print_per_requested;
@@ -707,8 +711,8 @@ def get_state():
    (Z,N,C,V) = (state["Z"], state["N"], state["C"], state["V"]);
    state_info = "%0.4d" % cycle_num;
    state_info += " " * (7 - len(state["STATE"]));
-   state_info += "%s %s %s %s %s%s%s%s %s %s" % (state["STATE"], state["PC"], 
-                                            state["IR"], state["SP"], 
+   state_info += "%s %s %s %s %s%s%s%s %s %s" % (state["STATE"], state["PC"],
+                                            state["IR"], state["SP"],
                                             Z, N, C, V,
                                             state["MAR"], state["MDR"]);
    for reg in state["regFile"]:
@@ -758,7 +762,7 @@ def fget_memory(args):
          state_str = hex_to_state(value_no_regs);
          rd = bs(int(value,16), "5:3");
          rs = bs(int(value,16), "2:0");
-         mem_val = "mem[%s]: %s %s %d %d" % (addr, value, 
+         mem_val = "mem[%s]: %s %s %d %d" % (addr, value,
                                          state_str, rd, rs);
          if ("fh" in args):
             args["fh"].write(mem_val + "\n");
@@ -792,7 +796,7 @@ def cycle():
    ### End of ALU ##
 
    ### Memory ###
-   mem_data = memory_sim({"re" : cp_out["re"], "we" : cp_out["we"], 
+   mem_data = memory_sim({"re" : cp_out["re"], "we" : cp_out["we"],
                       "data" : state["MDR"], "addr" : state["MAR"]});
 
    ### Sequential Logic ###
@@ -1027,8 +1031,8 @@ def to_4_digit_uc_hex(num):
    return ("%.4x" % num).upper();
 
 def sigint_handler(signal, frame):
-   print("Unexpected input, did you forget to quit?");
+   print("\nUnexpected input, did you forget to quit?");
    exit();
 
-signal.signal(signal.SIGINT, signal_handler);
+signal.signal(signal.SIGINT, sigint_handler);
 main();
