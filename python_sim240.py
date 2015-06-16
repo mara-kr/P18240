@@ -199,6 +199,7 @@ menu = {
    'get_reg' : '^\s*(\*|pc|sp|ir|mar|mdr|z|c|v|n|state|r[0-7*])\s*\?$',
    'set_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})\]\s*=\s*([0-9a-f]{1,4})$',   # m[10] = 0a10
    'get_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})(:([0-9a-f]{1,4}))?\]\s*\?$', # m[50]? ; mem[10:20]?
+   'check' : '^\s*check\s+([\w\.]+)\s*$',
 };
 
 # filehandles
@@ -320,7 +321,7 @@ def main():
                      dest = "get_version", default = False);
    parser.add_option("-r", "--run", action = "store_true",
                      dest = "run_only", default = False);
-   parser.add_option("-nrand", "--notrandomized", action = "store_false",
+   parser.add_option("-n", "--norandom", action = "store_false",
                      dest = "randomize_memory", default = True);
    parser.add_option("-t", "--transcript", action = "store_true",
                      dest = "create_transcript", default = False);
@@ -488,6 +489,9 @@ def interface(input_fh):
          matchObj = match(menu["get_mem"], line, re.IGNORECASE);
          fget_memory({"lo" : matchObj.group(2),
                       "hi" : matchObj.group(4)});
+      elif (match(menu["check"], line, re.INGORECASE)):
+         matchObj = match(menu["check"], line, re.IGNORECASE);
+         check_state(matchObj.group(1));
       elif (match("^$", line, re.IGNORECASE)): # user just struck enter
          pass; # something needs to be here for python
       else:
@@ -666,7 +670,11 @@ def load(filename):
 # restored using load.
 def save(filename):
    tran_print("saving to $file...");
-   fh = open(filename, "w");
+   try:
+      fh = open(filename, "w");
+   except:
+      tran_print("Unable to write to " + filename);
+      return;
    fh.write("Breakpoints:\n");
    for key in breakpoints:
       fh.write(key + "\n");
@@ -768,6 +776,28 @@ def fget_memory(args):
             args["fh"].write(mem_val + "\n");
          elif ("fh" not in args):
             tran_print(mem_val);
+
+def check_state(state_file):
+   try:
+      fh = open(state_file, "r");
+   except:
+      tran_print("Failed to open state file");
+      return;
+   lines = fh.readlines();
+   while (not lines[0].startswith("State")):
+      lines.pop(0);
+   lines.pop(0); # removes "State: line
+   state = lines.pop(0);
+   if (state != get_state()):
+      print("States do not match");
+   lines.pop(0); # removes newline
+   lines.pop(0); # removes "Memory:"
+   for line in lines:
+      # match to regex to get addr and data
+      # compare addr and data
+      # print if different
+
+
 
 ########################
 # Simulator Code
