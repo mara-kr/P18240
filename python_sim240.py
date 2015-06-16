@@ -320,8 +320,8 @@ def main():
                      dest = "get_version", default = False);
    parser.add_option("-r", "--run", action = "store_true",
                      dest = "run_only", default = False);
-   parser.add_option("-m", "--memory", action = "store_true",
-                     dest = "randomize_memory", default = False);
+   parser.add_option("-nrand", "--notrandomized", action = "store_false",
+                     dest = "randomize_memory", default = True);
    parser.add_option("-t", "--transcript", action = "store_true",
                      dest = "create_transcript", default = False);
 
@@ -483,7 +483,7 @@ def interface(input_fh):
          get_reg(matchObj.group(1));
       elif (match(menu["set_mem"], line, re.IGNORECASE)):
          matchObj = match(menu["set_mem"], line, re.IGNORECASE);
-         set_memory(matchObj.group(2), matchObj.group(3));
+         set_memory(matchObj.group(2), matchObj.group(3), 1);
       elif (match(menu["get_mem"], line, re.IGNORECASE)):
          matchObj = match(menu["get_mem"], line, re.IGNORECASE);
          fget_memory({"lo" : matchObj.group(2),
@@ -548,14 +548,14 @@ def init_memory():
       for addr in xrange(1 << 16):
          data = to_4_digit_uc_hex(randint(0, int_max));
          addr = to_4_digit_uc_hex(addr);
-         set_memory(addr, data);
+         set_memory(addr, data, 0);
 
    global list_lines;
    for line in list_lines:
       arr = line.split(" ");
       addr = arr[0];
       data = arr[1];
-      memory[addr] = data.lower();
+      memory[addr] = [data.lower(),1];
 
 # Run simulator for n instructions
 # If n is undefined, run indefinitely
@@ -729,10 +729,10 @@ def print_regfile():
       tran_print(reg_str);
 
 
-def set_memory(addr, value):
+def set_memory(addr, value, valid):
    addr_hex = addr.upper();
    value_hex = value.upper();
-   memory[addr_hex] = value;
+   memory[addr_hex] = [value, valid];
 
 
 # Works as intended
@@ -754,7 +754,7 @@ def fget_memory(args):
    for index in xrange(lo, hi+1):
       addr = ("%.4x" % (index)).upper();
       if (addr in memory):
-         value = memory[addr];
+         value = memory[addr][0];
       else:
          value = "0000";
       if (not (value == "0000" and not print_zeros)):
@@ -764,9 +764,9 @@ def fget_memory(args):
          rs = bs(int(value,16), "2:0");
          mem_val = "mem[%s]: %s %s %d %d" % (addr, value,
                                          state_str, rd, rs);
-         if ("fh" in args):
+         if ("fh" in args and memory[addr][1]): #only save used memory
             args["fh"].write(mem_val + "\n");
-         else:
+         elif ("fh" not in args):
             tran_print(mem_val);
 
 ########################
@@ -952,9 +952,10 @@ def memory_sim(args):
 
    data_out = "0000"; # data_in would mimic bus more accurately...
    if (re == "MEM_RD") and (addr in memory):
-      data_out = memory[addr];
+      data_out = memory[addr][0];
    if (we == "MEM_WR"):
-      memory[addr] = data_in;
+      memory[addr][0] = data_in;
+      memory[addr][1] = 1;
 
    return data_out;
 
@@ -1011,8 +1012,7 @@ def hex_to_state(hex_value):
    if (key in uinst_bin_keys):
       state = uinst_bin_keys[key];
    else:
-      tran_print("Invalid binary code in IR: %s" % key);
-      state = 'FETCH';
+      state = 'INVALID';
    return state;
 
 def save_tran():
