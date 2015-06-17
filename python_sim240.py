@@ -7,6 +7,7 @@ import re
 from random import randint
 from string import join
 import signal
+import readline
 
 # Globals
 version = "1.21py"
@@ -489,7 +490,7 @@ def interface(input_fh):
          matchObj = match(menu["get_mem"], line, re.IGNORECASE);
          fget_memory({"lo" : matchObj.group(2),
                       "hi" : matchObj.group(4)});
-      elif (match(menu["check"], line, re.INGORECASE)):
+      elif (match(menu["check"], line, re.IGNORECASE)):
          matchObj = match(menu["check"], line, re.IGNORECASE);
          check_state(matchObj.group(1));
       elif (match("^$", line, re.IGNORECASE)): # user just struck enter
@@ -738,8 +739,8 @@ def print_regfile():
 
 
 def set_memory(addr, value, valid):
-   addr_hex = addr.upper();
-   value_hex = value.upper();
+   addr_hex = to_4_digit_uc_hex(int(addr,16));
+   value_hex = to_4_digit_uc_hex(int(value,16));
    memory[addr_hex] = [value, valid];
 
 
@@ -787,15 +788,23 @@ def check_state(state_file):
    while (not lines[0].startswith("State")):
       lines.pop(0);
    lines.pop(0); # removes "State: line
-   state = lines.pop(0);
-   if (state != get_state()):
-      print("States do not match");
+   file_state = lines.pop(0).split();
+   sim_state = get_state().split();
+   labels = wide_header.split();
+   for i in xrange(len(file_state)):
+      if (file_state[i] != "XXXX" and file_state[i] != sim_state[i]):
+         print(labels[i] + " does not match:\n sim = " + sim_state[i] +
+                         "\n file = " + file_state[i]);
    lines.pop(0); # removes newline
    lines.pop(0); # removes "Memory:"
    for line in lines:
-      # match to regex to get addr and data
-      # compare addr and data
-      # print if different
+      addr = line[4:8].upper();
+      file_val = line[11:15].upper();
+      sim_val = memory[addr][0].upper();
+      if (file_val != sim_val):
+         print(file_val + sim_val);
+         print("Memory at " + addr + " differs:\n sim = " + sim_val +
+                            "\n file = " + file_val);
 
 
 
@@ -815,14 +824,15 @@ def cycle():
    regA = state["regFile"][rf_selA]; #strings, since mux could select this
    regB = state["regFile"][rf_selB];
 
-   #@bug, mux call returns int
-   inA = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
+   inA = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["SP"],
               "REG" : regA}, cp_out["srcA"]), 16);
-   inB = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["PC"],
+   inB = int(mux({"PC" : state["PC"], "MDR" : state["MDR"], "SP" : state["SP"],
               "REG" : regB}, cp_out["srcB"]), 16);
 
    alu_in = {"alu_op" : cp_out["alu_op"], "inA" : inA, "inB" : inB};
    alu_out = alu(alu_in);
+   #print (cp_out["srcA"] + " " + cp_out["srcB"]);
+   #print (hex(inA) + " " + hex(inB) + " " + cp_out["alu_op"] + " " + alu_out["alu_result"]);
    ### End of ALU ##
 
    ### Memory ###
@@ -848,7 +858,7 @@ def cycle():
       for flag in ["Z", "N", "C", "V"]:
          state[flag] = alu_out[flag];
 
-   #print(state["Z"], alu_out["Z"], cp_out["load_CC"]);
+   
    state["STATE"] = cp_out["next_control_state"];
 
    global cycle_num;
@@ -903,7 +913,7 @@ def alu(args):
    elif (opcode == "F_A_PLUS_1"):
       out = bs(inA+1, '15:0');
       C = bs(inA+1, "16");
-      V = not bs(inA, "15") & bs(out, "15");
+      V = ~bs(inA, "15") & bs(out, "15");
    elif (opcode == "F_A_PLUS_B"):
       out = bs(inA+inB, '15:0');
       C = bs(inA+inB, "16");
@@ -923,7 +933,7 @@ def alu(args):
    elif (opcode == "F_A_MINUS_1"):
       out = bs(inA - 1, "15:0");
       C = bs(inA - 1, "16");
-      V = not bs(inA,"15") & bs(out,"15");
+      V = ~bs(inA,"15") & bs(out,"15");
    elif (opcode == "F_B"):
       out = inB;
    elif (opcode == "F_A_NOT"):

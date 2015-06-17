@@ -1,0 +1,76 @@
+addr data  label   opcode  operands
+---- ----  -----   ------  --------
+0000 0C00          LDI     R0 
+0001 0000                  $0 
+0002 3C00          LDSP    R0 
+0003 0C00          LDI     R0 
+0004 000A                  $A 
+0005 0C09          LDI     R1 
+0006 2000                  $2000 
+0007 0C12          LDI     R2 
+0008 0002                  $2 
+0009 3200          PUSH    R0 
+000A 3209          PUSH    R1 
+000B 3212          PUSH    R2 
+000C 3600          JSR     
+000D 0500                  pows 
+000E 0F00          ADDSP   
+000F 0003                  $3 
+0010 3000          STOP    
+0500 3200  pows    PUSH    R0 
+0501 3209          PUSH    R1 
+0502 3212          PUSH    R2 
+0503 321B          PUSH    R3 
+0504 3224          PUSH    R4 
+0505 4000          LDSF    R0 
+0506 0008                  $8 
+0507 4009          LDSF    R1 
+0508 0007                  $7 
+0509 4024          LDSF    R4 
+050A 0006                  $6 
+050B 0C12          LDI     R2 
+050C 0000                  $0 
+050D 0C1B          LDI     R3 
+050E 0000                  $0 
+050F 0A0B          STR     R1 R3 
+0510 0819  pows_l  LDR     R3 R1 
+0511 1409          INCR    R1 
+0512 1412          INCR    R2 
+0513 3224          PUSH    R4 
+0514 321B          PUSH    R3 
+0515 3600          JSR     
+0516 1000                  mul 
+0517 0F00          ADDSP   
+0518 0002                  $2 
+0519 0A0F          STR     R1 R7 
+051A 4610          CMR     R2 R0 
+051B 2C00          BRN     
+051C 0510                  pows_l 
+051D 3424  pows_d  POP     R4 
+051E 341B          POP     R3 
+051F 3412          POP     R2 
+0520 3409          POP     R1 
+0521 3400          POP     R0 
+0522 3800          RTN     
+1000 3200  mul     PUSH    R0 
+1001 3209          PUSH    R1 
+1002 3212          PUSH    R2 
+1003 4000          LDSF    R0 
+1004 0005                  $5 
+1005 4009          LDSF    R1 
+1006 0004                  $4 
+1007 0C12          LDI     R2 
+1008 0000                  $0 
+1009 0E10  mul_l   ADD     R2 R0 
+100A 1609          DECR    R1 
+100B 2A00          BRZ     
+100C 1011                  mul_d 
+100D 2C00          BRN     
+100E 1011                  mul_d 
+100F 2800          BRA     
+1010 1009                  mul_l 
+1011 3A3A  mul_d   MOV     R7 R2 
+1012 3412          POP     R2 
+1013 3409          POP     R1 
+1014 3400          POP     R0 
+1015 3800          RTN     

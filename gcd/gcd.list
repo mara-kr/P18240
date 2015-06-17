@@ -1,0 +1,61 @@
+addr data  label   opcode  operands
+---- ----  -----   ------  --------
+0000 0C00          LDI     R0 
+0001 0000                  $0 
+0002 3C00          LDSP    R0 
+0003 0C00          LDI     R0 
+0004 0021                  $21 
+0005 0C09          LDI     R1 
+0006 0048                  $48 
+0007 3200          PUSH    R0 
+0008 3209          PUSH    R1 
+0009 3600          JSR     
+000A 1000                  gcd 
+000B 0F00          ADDSP   
+000C 0002                  $2 
+000D 3000          STOP    
+1000 3200  gcd     PUSH    R0 
+1001 3209          PUSH    R1 
+1002 4000          LDSF    R0 
+1003 0004                  $4 
+1004 4009          LDSF    R1 
+1005 0003                  $3 
+1006 4409          CMI     R1 
+1007 0000                  $0 
+1008 2A00          BRZ     
+1009 1019                  base 
+100A 3200  recur   PUSH    R0 
+100B 3209          PUSH    R1 
+100C 3600          JSR     
+100D 2000                  mod 
+100E 0F00          ADDSP   
+100F 0002                  $2 
+1010 3209          PUSH    R1 
+1011 323F          PUSH    R7 
+1012 3600          JSR     
+1013 1000                  gcd 
+1014 0F00          ADDSP   
+1015 0002                  $2 
+1016 3409          POP     R1 
+1017 3400          POP     R0 
+1018 3800          RTN     
+1019 3A38  base    MOV     R7 R0 
+101A 3409          POP     R1 
+101B 3400          POP     R0 
+101C 3800          RTN     
+2000 3200  mod     PUSH    R0 
+2001 3209          PUSH    R1 
+2002 4000          LDSF    R0 
+2003 0004                  $4 
+2004 4009          LDSF    R1 
+2005 0003                  $3 
+2006 1001  m_loop  SUB     R0 R1 
+2007 2C00          BRN     
+2008 200B                  m_done 
+2009 2800          BRA     
+200A 2006                  m_loop 
+200B 0E01  m_done  ADD     R0 R1 
+200C 3A38          MOV     R7 R0 
+200D 3409          POP     R1 
+200E 3400          POP     R0 
+200F 3800          RTN     
