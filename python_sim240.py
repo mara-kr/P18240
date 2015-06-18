@@ -12,14 +12,12 @@ import readline
 # Globals
 version = "1.21py"
 
-user = ""; # holds user name from $USER environment var
-date = ""; # holds date and time info
-
 transcript = ""; # holds transcript of every line printed
 
 randomize_memory = False; # flag that randomizes the memory
 run_only = False; # flag that just does "run, quit"
 create_transcript = False; # flag that creates transcript of events if set
+check_file = ""; # file to check state against in grading mode
 
 wide_header = "Cycle STATE PC   IR   SP   ZNCV MAR  MDR  R0   R1   R2   R3   R4   R5   R6   R7";
 
@@ -144,7 +142,6 @@ uinst_str_keys = {
    'ADDSP'  : '00_0011_1100',
    'ADDSP1' : '00_0011_1101',
    'ADDSP2' : '00_0011_1110',
-#   UNDEF   : xx_xxxx_xxxx # NOTE: needed?
 };
 
 # we need to do a reverse lookup of the bits in IR when figuring out
@@ -200,7 +197,7 @@ menu = {
    'get_reg' : '^\s*(\*|pc|sp|ir|mar|mdr|z|c|v|n|state|r[0-7*])\s*\?$',
    'set_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})\]\s*=\s*([0-9a-f]{1,4})$',   # m[10] = 0a10
    'get_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})(:([0-9a-f]{1,4}))?\]\s*\?$', # m[50]? ; mem[10:20]?
-   'check' : '^\s*check\s+([\w\.]+)\s*$',
+   'check' : '^\s*check\s+([\w\.]+)\s*$', # check [state filename]
 };
 
 # filehandles
@@ -209,18 +206,12 @@ sim_fh = None;
 
 list_lines = [];
 
-# Globals for control path
-IR_state = "";
-BRN_next = "";
-BRZ_next = "";
-BRC_next = "";
-BRV_next = "";
 
 nextState_logic = {
    "FETCH" : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH1'],
    "FETCH1": ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'FETCH2'],
    "FETCH2": ['F_A',        'MDR', 'x',    'IR',    'NO_LOAD',    'NO_RD',    'NO_WR',    'DECODE'],
-   "DECODE": ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'NO_WR',    IR_state],
+   "DECODE": ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'NO_WR',    ""], #IR state
    "LDI"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'LDI1'],
    "LDI1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'LDI2'],
    "LDI2"  : ['F_A',        'MDR', 'x',    'REG',   'LOAD_CC',    'NO_RD',    'NO_WR',    'FETCH'],
@@ -234,21 +225,21 @@ nextState_logic = {
    "BRA"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'BRA1'],
    "BRA1"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRA2'],
    "BRA2"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
-   "BRN"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRN_next],
+   "BRN"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    ""], #BRN_next
    "BRN1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
    "BRN2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRN3'],
    "BRN3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
-   "BRZ"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRZ_next],
+   "BRZ"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    ""], #BRZ_next
    "BRZ1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
    "BRZ2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRZ3'],
    "BRZ3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
    "STOP"  : ['F_A_MINUS_1','PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'STOP1'],
    "STOP1" : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'NO_RD',    'NO_WR',    'STOP1'], # same as above
-   "BRC"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRC_next],
+   "BRC"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    ""], #BRC_next
    "BRC1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
    "BRC2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRC3'],
    "BRC3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
-   "BRV"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    BRV_next],
+   "BRV"   : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    ""], #BRV_next
    "BRV1"  : ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
    "BRV2"  : ['x',          'x',   'x',    'NONE',  'NO_LOAD',    'MEM_RD',   'NO_WR',    'BRV3'],
    "BRV3"  : ['F_A',        'MDR', 'x',    'PC',    'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH'],
@@ -326,6 +317,10 @@ def main():
                      dest = "randomize_memory", default = True);
    parser.add_option("-t", "--transcript", action = "store_true",
                      dest = "create_transcript", default = False);
+   parser.add_option("-q", "--quiet", action = "store_true",
+                     dest = "quiet_mode", default = False);
+   parser.add_option("-g", "--grade", default = "", type = "str",
+                     action = "store", dest = "check_file");
 
    (options, args) = parser.parse_args();
    if (options.get_version):
@@ -335,18 +330,25 @@ def main():
    global run_only;
    run_only = options.run_only;
 
+   global print_per;
+   if (options.quiet_mode):
+      print_per = "q";
+
+   global check_file;
+   if (options.check_file): #empty string is false
+      check_file = options.check_file;
+      run_only = True;
+      print_per = "q";
+
    global randomize_memory;
    randomize_memory = options.randomize_memory;
 
    global create_transcript;
    create_transcript = options.create_transcript;
-   global user;
-   global date;
-   user = getuser();
+
    date = datetime.now();
 
-
-   tran("User: " + user + "\n");
+   tran("User: " + getuser() + "\n");
    tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p") + "\n");
    tran("Arguments: " + str(args) + "\n\n");
 
@@ -385,13 +387,14 @@ def main():
    if (sim_fh != None): sim_fh.close();
    list_fh.close();
 
+# initalizes the simulator
 def init():
    get_labels();
 
    init_p18240(); #put p18240 into a known state
    init_memory(); #initalize the memory
 
-
+# prints usage for simulator
 def usage():
    tran_print("./sim240 [list_file] [sim_file]\n");
    exit();
@@ -423,7 +426,9 @@ def interface(input_fh):
       taking_user_input = False;
 
    if (run_only):
-      run();
+      run(0, "");
+      if (check_file): # in grading mode
+         check_state(check_file);
       done = True;
 
    while (not done):
@@ -433,7 +438,7 @@ def interface(input_fh):
           if (len(line) == 0):
             taking_user_input = True;
             continue;
-          tran_print(line + "\n");
+          tran_print(line);
       else:
          try:
             line = raw_input("> ");
@@ -442,14 +447,13 @@ def interface(input_fh):
             exit();
          tran(line + "\n");
 
-      #@FIX missing some commands
       # assume user input is valid until discovered not to be
       valid = True;
       #line = line.upper(); #should be independent of case
       if (match(menu["quit"], line, re.IGNORECASE)):
          done = True;
       elif (match(menu["help"], line, re.IGNORECASE)):
-         print_help();#@fix can't assign inside if
+         print_help();
       elif (match(menu["reset"], line, re.IGNORECASE)):
          init();
       elif (match(menu["run"], line, re.IGNORECASE)):
@@ -501,6 +505,7 @@ def interface(input_fh):
       if (not valid):
          tran_print("Invalid input. Type 'help' for help.");
 
+# prints help message
 def print_help():
    help_msg = '';
    help_msg += "\n";
@@ -527,7 +532,7 @@ def print_help():
    help_msg += "Note: All constants are interpreted as hexadecimal.\n";
    tran_print(help_msg);
 
-
+# initalizes the processor
 def init_p18240():
    global cycle_num;
    cycle_num = 0;
@@ -544,6 +549,7 @@ def init_p18240():
       else:
          state[key] = "0000";
 
+# initalizes the memory
 def init_memory():
    global memory;
    memory = {};
@@ -566,6 +572,8 @@ def init_memory():
 # If n is undefined, run indefinitely
 # In either case, the exception is to stop
 # at breakpoints or the STOP microinstruction
+# print_per_requested is how often state is printer (per U-instruction,
+# per Instruction, Quiet)
 def run(num, print_per_requested):
    if (not num): 
       num = (1<<32);
@@ -590,13 +598,13 @@ def run(num, print_per_requested):
 
 # Simulate one instruction
 def step():
-   cycle(); # @fix should just be do-while loop, doesn't exist in python
+   cycle(); # do-while in python
    if (print_per == "u"): tran_print(get_state());
    while (state["STATE"] != "FETCH" and state["STATE"] != "STOP1"):
       cycle();
       if (print_per == "u"): tran_print(get_state());
 
-# Set a break point at a given address of label.
+# Set a break point at a given address or label.
 # Any thing which matches a hex value (e.g. a, 0B, etc) is interpreted
 # as such *unless* it is surrounded by '' e.g. 'A' in which case it is
 # interpreted as a label and looked up in the labels hash.
@@ -623,6 +631,7 @@ def set_breakpoint(arg):
    global breakpoints;
    breakpoints[addr] = 1;
 
+# Clears a breakpoint at a given address or label
 def clear_breakpoint(arg):
    clear_all = False;
    is_label = False;
@@ -666,9 +675,9 @@ def list_breakpoints():
 def load(filename):
    tran_print("Feature not yet available.");
 
-# TODO: finish this subroutine.
-# Supposed to save all of the state to a file which can be
-# restored using load.
+# Save state of processor, memory, and breakpoints to a file. State
+# file can be used to check against the current processor state, or can
+# be loaded into simulation
 def save(filename):
    tran_print("saving to $file...");
    try:
@@ -688,6 +697,7 @@ def save(filename):
                 "zeros" : 0});
    fh.close();
 
+# Sets the value of a register
 def set_reg(reg_name, value):
    global state;
    reg_name = reg_name.upper(); #keys stored as uppercase
@@ -703,6 +713,7 @@ def set_reg(reg_name, value):
    else:
       state[reg_name] = to_4_digit_uc_hex(int(value,16));
 
+# Gets the value of a register
 def get_reg(reg_name):
    reg_name = reg_name.upper();
    if (reg_name == "*"):
@@ -716,6 +727,7 @@ def get_reg(reg_name):
       value = state[reg_name];
       tran_print("%s: %s" % (reg_name, value));
 
+# Gets a string containing all the state information
 def get_state():
    (Z,N,C,V) = (state["Z"], state["N"], state["C"], state["V"]);
    state_info = "%0.4d" % cycle_num;
@@ -728,6 +740,7 @@ def get_state():
       state_info += " " + reg;
    return state_info;
 
+# prints the state of R0-R7
 def print_regfile():
    even = False;
    for index in xrange(0,8,2):
@@ -737,14 +750,19 @@ def print_regfile():
       reg_str += "R%d: %s" %(index+1, value);
       tran_print(reg_str);
 
-
+# Sets a memory value. The valid bit specifies if it will be store in 
+# a save state file. By heuristic, memory is invalid until changed.
 def set_memory(addr, value, valid):
    addr_hex = to_4_digit_uc_hex(int(addr,16));
    value_hex = to_4_digit_uc_hex(int(value,16));
    memory[addr_hex] = [value, valid];
 
 
-# Works as intended
+# Gets the state of a selection of memory, arguments are passed in a dict
+# get_zeros specifies if zeros will be printed when they are reached
+# lo - the inclusive lower bound of memory
+# hi - the inclusive upper bound
+# fh - file handle to write memory state to, default to STDOUT
 def fget_memory(args):
    if ("zeros" in args):
       print_zeros = args["zeros"];
@@ -778,6 +796,11 @@ def fget_memory(args):
          elif ("fh" not in args):
             tran_print(mem_val);
 
+# Checks the state of the processor and memory against a given state file
+# Prints out differences. Registers set to XXXX/xxxx in state file are
+# ignored for comparison. Memory not specified in state file is also ignored
+# Breakpoints are always ignored.
+# TODO - make regex to match to any x/xx/xxx/xxxx.
 def check_state(state_file):
    try:
       fh = open(state_file, "r");
@@ -792,9 +815,9 @@ def check_state(state_file):
    sim_state = get_state().split();
    labels = wide_header.split();
    for i in xrange(len(file_state)):
-      if (file_state[i] != "XXXX" and file_state[i] != sim_state[i]):
-         print(labels[i] + " does not match:\n sim = " + sim_state[i] +
-                         "\n file = " + file_state[i]);
+      if (file_state[i].upper() != "XXXX" and file_state[i] != sim_state[i]):
+         tran_print(labels[i] + " does not match:\n sim = " + sim_state[i]
+                         + "\n file = " + file_state[i]);
    lines.pop(0); # removes newline
    lines.pop(0); # removes "Memory:"
    for line in lines:
@@ -802,8 +825,8 @@ def check_state(state_file):
       file_val = line[11:15].upper();
       sim_val = memory[addr][0].upper();
       if (file_val != sim_val):
-         print(file_val + sim_val);
-         print("Memory at " + addr + " differs:\n sim = " + sim_val +
+         tran_print(file_val + sim_val);
+         tran_print("Memory at " + addr + " differs:\n sim = " + sim_val +
                             "\n file = " + file_val);
 
 
@@ -812,7 +835,7 @@ def check_state(state_file):
 # Simulator Code
 ########################
 
-# Passes arguments to ALU as integers
+# Simulate one cycle in the processor
 def cycle():
    # Control Path ###
    cp_out = control();
@@ -831,8 +854,6 @@ def cycle():
 
    alu_in = {"alu_op" : cp_out["alu_op"], "inA" : inA, "inB" : inB};
    alu_out = alu(alu_in);
-   #print (cp_out["srcA"] + " " + cp_out["srcB"]);
-   #print (hex(inA) + " " + hex(inB) + " " + cp_out["alu_op"] + " " + alu_out["alu_result"]);
    ### End of ALU ##
 
    ### Memory ###
@@ -842,7 +863,6 @@ def cycle():
    ### Sequential Logic ###
    dest = cp_out["dest"];
 
-   #global state;
    if (dest != "NONE"):
       if (dest == "REG"):
          state["regFile"][rf_selA] = alu_out["alu_result"];
@@ -868,12 +888,11 @@ def cycle():
 ############# CONTROL PATH CODE ##################
 ##################################################
 
+# gets the micro instruction assocated with a given state
 def control():
 
-   global IR_state;
-   global nextState_logic;
-   IR_state = hex_to_state(state["IR"]);
-   nextState_logic["DECODE"][7] = IR_state; #@FIX, IR_state wasn't updating
+   # python is bad with globals
+   nextState_logic["DECODE"][7] = hex_to_state(state["IR"]);
    nextState_logic["BRN"][7] = "BRN2" if int(state["N"]) else "BRN1";
    nextState_logic["BRZ"][7] = "BRZ2" if int(state["Z"]) else "BRZ1";
    nextState_logic["BRV"][7] = "BRV2" if int(state["V"]) else "BRV1";
@@ -882,7 +901,7 @@ def control():
 
    output = nextState_logic[curr_state];
 
-   rv = {
+   uinstr = {
       "alu_op" : output[0],
       "srcA" : output[1],
       "srcB" : output[2],
@@ -893,7 +912,7 @@ def control():
       "next_control_state" : output[7],
    };
 
-   return rv;
+   return uinstr;
 
 # Simulates the P18240's ALU. args values are ints, values are returned
 # as strings.
@@ -907,7 +926,6 @@ def alu(args):
    N = 0;
    V = 0;
 
-   # @BUG V FLAG IS INCORRECT
    if (opcode == "F_A"):
       out = inA;
    elif (opcode == "F_A_PLUS_1"):
@@ -925,11 +943,11 @@ def alu(args):
    elif (opcode == "F_A_MINUS_B_1"):
       out = bs(inA - inB - 1,'15:0'); # A-B-1 (set carry below)
       C = ((inB + 1) >= inA);
-      V = (bs(inA,"15") & bs(inB,"15") & ~bs(out,"15")) | (~bs(inA,"15") & ~bs(inB,"15") & bs(out,"15"));
+      V = (bs(inA,"15") & ~bs(inB,"15") & ~bs(out,"15")) | (~bs(inA,"15") & bs(inB,"15") & bs(out,"15"));
    elif (opcode == "F_A_MINUS_B"):
       out = bs(inA - inB,'15:0'); # A-B (set carry below)
       C = 1 if (inB >= inA) else 0;
-      V = (bs(inA,"15") & bs(inB,"15") & ~bs(out,"15")) | (~bs(inA,"15") & ~bs(inB,"15") & bs(out,"15"));
+      V = (bs(inA,"15") & ~bs(inB,"15") & ~bs(out,"15")) | (~bs(inA,"15") & bs(inB,"15") & bs(out,"15"));
    elif (opcode == "F_A_MINUS_1"):
       out = bs(inA - 1, "15:0");
       C = bs(inA - 1, "16");
@@ -948,7 +966,7 @@ def alu(args):
       C = bs(inA << 1, "15");
       out = bs(inA << 1, "15:0");
    elif (opcode == "F_A_ROL"):
-      out = (bs(inA, "14:0") << 1) + state["C"];
+      out = (bs(inA, "14:0") << 1) + int(state["C"]);
       C = bs(inA, "15");
    elif (opcode == "F_A_LSHR"):
       C = bs(inA, "0");
@@ -958,10 +976,8 @@ def alu(args):
       out = (bs(inA,"15") << 15) + bs(inA, "15:1");
    elif (opcode == "x"):
       out = 0;
-      Z = N = C = V = 0;
    else:
-      # TODO: probably should do something else like return 'x'
-      print("error: invalid alu opcode $opcode");
+      print("Error: invalid alu opcode $opcode");
 
    N = bs(out, "15");
    Z = 1 if (out == 0) else 0;
@@ -999,8 +1015,7 @@ def memory_sim(args):
 
    return data_out;
 
-# Simulates a multiplexor. The inputs to be selected must be in a hash
-# TODO - maybe not necessary? Mimics hardware at cost of complexity
+# Simulates a multiplexor. The inputs to be selected must be in a dictionary
 def mux(inputs, sel):
    if (sel == "x"):
       return '0';
@@ -1020,7 +1035,7 @@ def tran(line):
 
 # add the string to the transcript and print to file
 def tran_print(line):
-   tran(line + "\n"); #@fix might be double new lines in cases
+   tran(line + "\n"); 
    print(line);
 
 # Bitslice subroutine.
@@ -1052,9 +1067,10 @@ def hex_to_state(hex_value):
    if (key in uinst_bin_keys):
       state = uinst_bin_keys[key];
    else:
-      state = 'INVALID';
+      state = 'UNDEF';
    return state;
 
+# Saves the transcript to transcript.txt
 def save_tran():
    if (create_transcript):
       try:
@@ -1070,6 +1086,7 @@ def save_tran():
 def to_4_digit_uc_hex(num):
    return ("%.4x" % num).upper();
 
+# Signal handler for SIGINTs
 def sigint_handler(signal, frame):
    print("\nUnexpected input, did you forget to quit?");
    exit();

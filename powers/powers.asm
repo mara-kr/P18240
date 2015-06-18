@@ -15,8 +15,8 @@
 pows    PUSH R0; n
         PUSH R1; addr
         PUSH R2; current n
-        PUSH R3; current multiple
-        PUSH R4; multiple argument
+        PUSH R3; current power
+        PUSH R4; base argument
         LDSF R0, $8;
         LDSF R1, $7;
         LDSF R4, $6;
@@ -29,7 +29,7 @@ pows_l  LDR R3, R1;
         INCR R2;
         PUSH R4;
         PUSH R3;
-        JSR mul; (curr multiple * multiple arg)
+        JSR mul; (curr power * base arg)
         ADDSP $2;
         STR R1, R7;
         CMR R2, R0;

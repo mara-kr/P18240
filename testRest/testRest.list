@@ -1,0 +1,97 @@
+addr data  label   opcode  operands
+---- ----  -----   ------  --------
+0000 0C00  start   LDI     R0 
+0001 0ADC                  $0ADC 
+0002 3A10          MOV     R2 R0 
+0003 2412          LSHR    R2 
+0004 2412          LSHR    R2 
+0005 2012          LSHL    R2 
+0006 2012          LSHL    R2 
+0007 4610          CMR     R2 R0 
+0008 2A00          BRZ     
+0009 000D                  negate 
+000A 0C3F  bad0    LDI     R7 
+000B BAD0                  $BAD0 
+000C 3000          STOP    
+000D 3A10  negate  MOV     R2 R0 
+000E 3A18          MOV     R3 R0 
+000F 1212          NEG     R2 
+0010 181B          NOT     R3 
+0011 0C24          LDI     R4 
+0012 FFFF                  $FFFF 
+0013 101C          SUB     R3 R4 
+0014 461A          CMR     R3 R2 
+0015 2A00          BRZ     
+0016 001A                  test_xor 
+0017 0C3F  bad1    LDI     R7 
+0018 BAD1                  $BAD1 
+0019 3000          STOP    
+001A 3A10  test_xor MOV     R2 R0 
+001B 3A18          MOV     R3 R0 
+001C 1E13          XOR     R2 R3 
+001D 2A00          BRZ     
+001E 0022                  mem 
+001F 0C3F  bad2    LDI     R7 
+0020 BAD2                  $BAD2 
+0021 3000          STOP    
+0022 3A10  mem     MOV     R2 R0 
+0023 0612          STA     R2 
+0024 1000                  $1000 
+0025 0412          LDA     R2 
+0026 1000                  $1000 
+0027 4610          CMR     R2 R0 
+0028 2A00          BRZ     
+0029 002D                  test_rol 
+002A 0C3F  bad3    LDI     R7 
+002B BAD3                  $BAD3 
+002C 3000          STOP    
+002D 0C1B  test_rol LDI     R3 
+002E 8000                  $8000 
+002F 221B          ROL     R3 
+0030 4800          BRC     
+0031 0035                  rol_next 
+0032 0C3F  bad4    LDI     R7 
+0033 BAD4                  $BAD4 
+0034 3000          STOP    
+0035 0C1B  rol_next LDI     R3 
+0036 7FFF                  $7FFF 
+0037 221B          ROL     R3 
+0038 4800          BRC     
+0039 0032                  bad4 
+003A 0C09  brv_A   LDI     R1 
+003B FFFF                  $FFFF 
+003C 0C12          LDI     R2 
+003D 7FFF                  $7FFF 
+003E 1A0A          AND     R1 R2 
+003F 0E11          ADD     R2 R1 
+0040 2E00          BRV     
+0041 0045                  brv_B 
+0042 0C3F  bad5    LDI     R7 
+0043 BAD5                  $BAD5 
+0044 3000          STOP    
+0045 1609  brv_B   DECR    R1 
+0046 2E00          BRV     
+0047 0042                  bad5 
+0048 0C09  sp      LDI     R1 
+0049 BEEF                  $BEEF 
+004A 3E12          STSP    R2 
+004B 1412          INCR    R2 
+004C 4209          STSF    R1 
+004D 0001                  $1 
+004E 081A          LDR     R3 R2 
+004F 4619          CMR     R3 R1 
+0050 2A00          BRZ     
+0051 0055                  test_ashr 
+0052 0C3F  bad6    LDI     R7 
+0053 BAD6                  $BAD6 
+0054 3000          STOP    
+0055 0C12  test_ashr LDI     R2 
+0056 8000                  $8000 
+0057 3A1A          MOV     R3 R2 
+0058 2612          ASHR    R2 
+0059 1A1A          AND     R3 R2 
+005A 2A00          BRZ     
+005B 0052                  bad6 
+005C 0C3F  done    LDI     R7 
+005D 1337                  $1337 
+005E 3000          STOP    
