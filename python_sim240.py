@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from optparse import OptionParser
 from getpass import getuser
 from datetime import datetime
@@ -8,7 +9,10 @@ from random import randint
 from string import join
 import signal
 import readline
+import sys
 
+# supress .pyc file - speedup doesn't justify cleanup
+sys.dont_write_bytecode = True; 
 # Globals
 version = "1.21py"
 
@@ -321,6 +325,8 @@ def main():
                      dest = "quiet_mode", default = False);
    parser.add_option("-g", "--grade", default = "", type = "str",
                      action = "store", dest = "check_file");
+   parser.add_option("-p", "--pipe", default = False,
+                     dest = "pipe", action = "store_true");
 
    (options, args) = parser.parse_args();
    if (options.get_version):
@@ -352,32 +358,40 @@ def main():
    tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p") + "\n");
    tran("Arguments: " + str(args) + "\n\n");
 
-   if (len(args) < 1): #args takes out flags and argv[0]
-      usage();
+   global list_lines;
+   if (options.pipe): # reading list file from assembler
+      while(True):
+         try:
+            line = raw_input();
+            if (len(line) > 0): #reading will grab empty lines
+               list_lines.append(line);
+         except EOFError:
+            break;
+   else:
+      if (len(args) < 1): #args takes out flags and argv[0]
+         usage();
+      list_filename = args.pop(0);
+      global list_fh;
+      try:
+         list_fh = open(list_filename, "r");
+      except:
+         print("Failed to open list_file");
+         exit();
+      # read all lines from list_fh, store in array,
+      list_lines = list_fh.readlines();
+   
+   list_lines.pop(0); # remove 'addr data  label   opcode  operands'
+   list_lines.pop(0); # remove '---- ----  -----   ------  --------'
 
-   list_filename = args[0];
    global sim_fh;
-    # sim file is optional (read input from STDIN if not specified)
-   if (len(args) > 1):
-      sim_filename = args[1];
+   # sim file is optional (read input from STDIN if not specified)
+   if (len(args) > 0):
+      sim_filename = args.pop(0);
       try:
          sim_fh = open(sim_filename, "r");
       except:
          print("Failed to open sim_file\n");
          exit();
-
-   global list_fh;
-   try:
-      list_fh = open(list_filename, "r");
-   except:
-      print("Failed to open list_file");
-      exit();
-
-   # read all lines from list_fh, store in array, remove first 2 lines
-   global list_lines;
-   list_lines = list_fh.readlines();
-   list_lines.pop(0); # remove 'addr data  label   opcode  operands'
-   list_lines.pop(0); # remove '---- ----  -----   ------  --------'
 
    init();
 
@@ -385,7 +399,7 @@ def main():
    save_tran(); #save transcript
 
    if (sim_fh != None): sim_fh.close();
-   list_fh.close();
+   if (list_fh != None): list_fh.close();
 
 # initalizes the simulator
 def init():
@@ -396,7 +410,7 @@ def init():
 
 # prints usage for simulator
 def usage():
-   tran_print("./sim240 [list_file] [sim_file]\n");
+   tran_print("./sim240 [list_file] [sim_file]");
    exit();
 
 # Reads label from list file and adds them to the labels hash.
