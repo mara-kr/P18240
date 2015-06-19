@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+
+# sim240.py: Version 1.3
+# Simulator for p18240
+# Written by Neil Ryan <nryan@andrew.cmu.edu>
+# Adapted from perl script by Paul Kennedy (version 1.21)
+# Last updated 6/18/2015
+
+# In Progress:
+# * Document code
+# * Finish load subroutine
+
+# Known Bugs:
+# If any additional bugs are found, contact nryan@andrew.cmu.edu
 from optparse import OptionParser
 from getpass import getuser
 from datetime import datetime
@@ -14,7 +27,7 @@ import sys
 # supress .pyc file - speedup doesn't justify cleanup
 sys.dont_write_bytecode = True; 
 # Globals
-version = "1.21py"
+version = "1.3"
 
 transcript = ""; # holds transcript of every line printed
 
@@ -478,9 +491,9 @@ def interface(input_fh):
          step();
          if (print_per == "i"): tran_print(get_state());
       elif (match(menu["ustep"], line, re.IGNORECASE)):
-         if (print_per == "u"): tran_print(wide_header);
+         if (print_per != "q"): tran_print(wide_header);
          cycle();
-         if (print_per == "u"): tran_print(get_state());
+         if (print_per != "q"): tran_print(get_state());
       elif (match(menu["break"], line, re.IGNORECASE)):
          matchObj = match(menu["break"], line, re.IGNORECASE);
          set_breakpoint(matchObj.group(1));
