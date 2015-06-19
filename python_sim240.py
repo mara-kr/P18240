@@ -713,6 +713,32 @@ def load(filename):
       line = lines.pop(0);
    lines.pop(0); # empty line
    lines.pop(0); # State:
+   values = lines.pop(0).split();
+   labels = wide_header.split();
+   global state;
+   for i in xrange(len(labels)):
+      label = labels[i];
+      if (label in state):
+         state[label] = values[i];
+      elif (match("^\s*R?\s*(\d*)?\s*$", label)):
+         matchObj = match("^\s*R?\s*(\d*)?\s*$", label);
+         reg_num = int(matchObj.group(1));
+         state["regFile"][reg_num] = values[i];
+      elif (label == "Cycle"):
+         global cycle_num;
+         cycle_num = int(values[i]);
+      else: # ZNCV register
+         flag_num = 0;
+         for flag in ["Z", "N", "C", "V"]:
+            state[flag] = value[flag_num];
+            flag_num += 1;
+   lines.pop(0); # newline
+   lines.pop(0); # Memory:
+   while (len(lines) > 0):
+      line = lines.pop(0);
+      addr = line[4:8];
+      value = line[11:15];
+      set_memory(addr, value, 1);
    return;
 
 # Save state of processor, memory, and breakpoints to a file. State
