@@ -698,15 +698,28 @@ def list_breakpoints():
    for key in breakpoints:
       tran_print(key);
 
-# TODO: load a state file
+# TODO: Finish
 def load(filename):
-   tran_print("Feature not yet available.");
+   tran_print("Loading from " + filename + "...");
+   try:
+      fh = open(filename, "r");
+   except:
+      tran_print("Unable to read from " + filename);
+   lines = fh.readlines();
+   lines.pop(0); #removes "Breakpoints"
+   line = lines.pop(0);
+   while (len(line) > 0): # breakpoints to add still
+      set_breakpoint(line);
+      line = lines.pop(0);
+   lines.pop(0); # empty line
+   lines.pop(0); # State:
+   return;
 
 # Save state of processor, memory, and breakpoints to a file. State
 # file can be used to check against the current processor state, or can
 # be loaded into simulation
 def save(filename):
-   tran_print("saving to $file...");
+   tran_print("Saving to " + filename + "...");
    try:
       fh = open(filename, "w");
    except:

@@ -1,0 +1,44 @@
+User Guide for sim240:
+
+Flags:
+-r => run only; runs the program (same as r command in simulator), then exits
+-n => no-randomize; doesn't randomize memory, just initializes to "0000"
+-t => transcript; creates a transcript of simulator IO upon quitting
+-q => quiet mode; simulator will not print state unless explicitly requested
+-v => version; prints simulator version
+-g [filename] => grade mode; Runs the program in quiet mode, then checks the
+        state of the simulator against the given state file (filename), then
+        exits.
+
+Commands:
+quit/q/exit => quits the simulator
+help/h/? => prints help text
+reset => resets the simulator (resets state to initial values)
+run/run 5/run 5u/run 5q => runs the simulator. If no arguments are given, 
+        the simulator runs until it reaches a STOP instruction or a breakpoint.
+        If an argument is given (run [n]), run n instructions. If the argument
+        is specified further (5q, 5u), the simulator prints state every
+        instruction (i), micro-instruction (u), or never (q).
+step => simulate a single instruction
+ustep => simulate a single micro-instruction
+break [addr/label] => sets a breakpoint at a given breakpoint or label
+clear [addr/label] => clears a breakpoint at a given breakpoint or label
+lsbrk => list all set breakpoints
+save [filename] => saves the state of the simulator to a given filename
+load [filename] => loads simulator state from a given filename
+check [filename] => checks the current simulator state against the state in
+        a given state file, and prints output.
+reg_name = value => sets the value of a given register
+reg_name? => prints the value of a given register. R*? prints the value of 
+        R0-R7, *? prints the value of all registers.
+m[addr]?/mem[addr]? => prints the value held in a given memory address
+m[lo:hi]?/mem[lo:hi]? => prints the values held in memory locations between
+        lo and hi, inclusive.
+
+-PC option for run
+-More intuitive user options
+-Maybe explain breakpoints to students - in tutorial or otherwise
+-Parsing list file more robust, labels can be longer than 6 characters
+-multiple breakpoints per file
+-breakpoints at .EQU points, does .EQU get replaced with const. at assemble-time
+-Better documentation for test suite
