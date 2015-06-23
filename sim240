@@ -24,6 +24,25 @@ import readline
 
 # supress .pyc file - speedup doesn't justify cleanup
 sys.dont_write_bytecode = True; 
+
+###############################
+###### TAB COMPLETION #########
+###############################
+commands = ['lables', 'lsbrk', 'quit', 'exit', 'help', 'run', 'reset',
+            'step', 'save', 'ustep', 'clear', 'load', 'check', 'break',
+            'mem[']
+def complete(text, state):
+    for cmd in commands:
+        if cmd.startswith(text):
+            if not state:
+                return cmd
+            else:
+                state -= 1
+
+readline.parse_and_bind("tab: complete");
+readline.set_completer(complete);
+################################
+
 # Globals
 version = "1.3"
 
@@ -215,6 +234,7 @@ menu = {
    'set_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})\]\s*=\s*([0-9a-f]{1,4})$',   # m[10] = 0a10
    'get_mem' : '^\s*m(em)?\[([0-9a-f]{1,4})(:([0-9a-f]{1,4}))?\]\s*\?$', # m[50]? ; mem[10:20]?
    'check' : '^\s*check\s+([\w\.]+)\s*$', # check [state filename]
+   'labels' : '^\s*labels\s*$',
 };
 
 # filehandles
@@ -533,6 +553,8 @@ def interface(input_fh):
       elif (match(menu["check"], line, re.IGNORECASE)):
          matchObj = match(menu["check"], line, re.IGNORECASE);
          check_state(matchObj.group(1));
+      elif (match(menu["labels"], line, re.IGNORECASE)):
+         print_labels();
       elif (match("^$", line, re.IGNORECASE)): # user just struck enter
          pass; # something needs to be here for python
       else:
@@ -892,7 +914,7 @@ def check_state(state_file):
    labels = wide_header.split();
    dont_care = "^\s*x{1,4}\s*$";
    for i in xrange(len(file_state)):
-      if (match(dont_care, file_state[i].upper(), re.IGNORECASE) and 
+      if (not match(dont_care, file_state[i].upper(), re.IGNORECASE) and 
                 file_state[i] != sim_state[i]):
          tran_print(labels[i] + " differs: sim = " + sim_state[i]
                          + ", file = " + file_state[i]);
@@ -905,6 +927,12 @@ def check_state(state_file):
       if (file_val != sim_val):
          tran_print("Mem[" + addr + "] differs: sim = " + sim_val +
                             ", file = " + file_val);
+
+# Prints all the labels associated with the given .list file
+def print_labels():
+   for key in labels:
+      if (len(key) > 0): # ignores spuriously created labels
+         tran_print(key + ": " + labels[key]);
 
 
 

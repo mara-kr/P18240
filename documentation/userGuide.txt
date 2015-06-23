@@ -8,7 +8,8 @@ Flags:
 -v => version; prints simulator version
 -g [filename] => grade mode; Runs the program in quiet mode, then checks the
         state of the simulator against the given state file (filename), then
-        exits.
+        exits. If a simulation file is provided, the simulator will run the
+        commands in the simulation file, then check state, then exit.
 
 Commands:
 quit/q/exit => quits the simulator
@@ -34,6 +35,7 @@ reg_name? => prints the value of a given register. R*? prints the value of
 m[addr]?/mem[addr]? => prints the value held in a given memory address
 m[lo:hi]?/mem[lo:hi]? => prints the values held in memory locations between
         lo and hi, inclusive.
+labels => prints the labels associated with the supplied .list file
 
 -More intuitive user options
 -Maybe explain breakpoints to students - in tutorial or otherwise
@@ -45,4 +47,3 @@ m[lo:hi]?/mem[lo:hi]? => prints the values held in memory locations between
 -breakpoints at .EQU points, .EQU replaced with const. at assemble-time?
     => label is used in list file, but cannot break to label (as nothing is
     parsed beyond the label)
--View labels command?
