@@ -877,7 +877,6 @@ def fget_memory(args):
 # Prints out differences. Registers set to XXXX/xxxx in state file are
 # ignored for comparison. Memory not specified in state file is also ignored
 # Breakpoints are always ignored.
-# TODO - make regex to match to any x/xx/xxx/xxxx.
 def check_state(state_file):
    try:
       fh = open(state_file, "r");
@@ -891,8 +890,10 @@ def check_state(state_file):
    file_state = lines.pop(0).split();
    sim_state = get_state().split();
    labels = wide_header.split();
+   dont_care = "^\s*x{1,4}\s*$";
    for i in xrange(len(file_state)):
-      if (file_state[i].upper() != "XXXX" and file_state[i] != sim_state[i]):
+      if (match(dont_care, file_state[i].upper(), re.IGNORECASE) and 
+                file_state[i] != sim_state[i]):
          tran_print(labels[i] + " differs: sim = " + sim_state[i]
                          + ", file = " + file_state[i]);
    lines.pop(0); # removes newline
