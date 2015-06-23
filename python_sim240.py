@@ -5,16 +5,15 @@
 # Written by Neil Ryan <nryan@andrew.cmu.edu>
 # Adapted from perl script by Paul Kennedy (version 1.21)
 # Last updated 6/18/2015
-
+#
 # In Progress:
-# * Document code
-# * Finish load subroutine
-
+#
 # Known Bugs:
 # If any additional bugs are found, contact nryan@andrew.cmu.edu
 from optparse import OptionParser
 from getpass import getuser
 from datetime import datetime
+import sys
 from sys import argv
 from re import match
 import re
@@ -22,7 +21,6 @@ from random import randint
 from string import join
 import signal
 import readline
-import sys
 
 # supress .pyc file - speedup doesn't justify cleanup
 sys.dont_write_bytecode = True; 
@@ -35,6 +33,8 @@ randomize_memory = False; # flag that randomizes the memory
 run_only = False; # flag that just does "run, quit"
 create_transcript = False; # flag that creates transcript of events if set
 check_file = ""; # file to check state against in grading mode
+quit_after_sim_file = False; # if -g is set and a sim file is provided,
+                             # we quit after running the sim file
 
 wide_header = "Cycle STATE PC   IR   SP   ZNCV MAR  MDR  R0   R1   R2   R3   R4   R5   R6   R7";
 
@@ -223,7 +223,8 @@ sim_fh = None;
 
 list_lines = [];
 
-
+# Next state logic based on current state. Empty strings are states 
+# dependent on flags
 nextState_logic = {
    "FETCH" : ['F_A',        'PC',  'x',    'MAR',   'NO_LOAD',    'NO_RD',    'NO_WR',    'FETCH1'],
    "FETCH1": ['F_A_PLUS_1', 'PC',  'x',    'PC',    'NO_LOAD',    'MEM_RD',   'NO_WR',    'FETCH2'],
@@ -356,7 +357,6 @@ def main():
    global check_file;
    if (options.check_file): #empty string is false
       check_file = options.check_file;
-      run_only = True;
       print_per = "q";
 
    global randomize_memory;
@@ -397,14 +397,19 @@ def main():
    list_lines.pop(0); # remove '---- ----  -----   ------  --------'
 
    global sim_fh;
+   global quit_after_sim_file;
    # sim file is optional (read input from STDIN if not specified)
    if (len(args) > 0):
       sim_filename = args.pop(0);
+      if (check_file):
+         quit_after_sim_file = True;
       try:
          sim_fh = open(sim_filename, "r");
       except:
          print("Failed to open sim_file\n");
          exit();
+   elif (check_file): 
+      run_only = True; # no simulator file and grading, just run
 
    init();
 
@@ -464,15 +469,19 @@ def interface(input_fh):
           line = input_fh.readline();
           if (len(line) == 0):
             taking_user_input = True;
+            if (quit_after_sim_file):
+               check_state(check_file);
+               done = True;
             continue;
-          tran_print(line);
+          if (not check_file): #in grading mode
+            tran_print(line.rstrip("\n"));
       else:
          try:
             line = raw_input("> ");
          except EOFError:
             print("\nUnexpected input, did you forget to quit?");
             exit();
-         tran(line + "\n");
+         tran(line);
 
       # assume user input is valid until discovered not to be
       valid = True;
@@ -536,17 +545,19 @@ def interface(input_fh):
 def print_help():
    help_msg = '';
    help_msg += "\n";
-   help_msg += "quit,q,exit                Quit the simulator.\n";
-   help_msg += "help,h,?                   Print this help message.\n";
-   help_msg += "step,s                     Simulate one instruction.\n";
-   help_msg += "ustep,u                    Simulate one micro-instruction.\n";
-   help_msg += "run,r [n]                  Simulate the next n instructions.\n";
-   help_msg += "break [addr/label]         Set a breakpoint at [addr] or [label].\n";
-   help_msg += "lsbrk                      List all of the breakpoints set.\n";
-   help_msg += "clear [addr/label/*]       Clear breakpoint at [addr], [label], or clear all.\n";
-   help_msg += "reset                      Reset the processor to initial state.\n";
-   help_msg += "save [file]                Save the current state to a file.\n";
-   help_msg += "load [file]                Load the state from a given file.\n";
+   help_msg += "quit,q,exit             Quit the simulator.\n";
+   help_msg += "help,h,?                Print this help message.\n";
+   help_msg += "step,s                  Simulate one instruction.\n";
+   help_msg += "ustep,u                 Simulate one micro-instruction.\n";
+   help_msg += "run,r [n]               Simulate the next n instructions.\n";
+   help_msg += "run nu                  Same as above, but print ever ustep\n";
+   help_msg += "break [addr/label]      Set a breakpoint at [addr] or [label].\n";
+   help_msg += "lsbrk                   List all set breakpoints.\n";
+   help_msg += "clear [addr/label/*]    Clear breakpoint at [addr]/[label], or clear all.\n";
+   help_msg += "reset                   Reset the processor to initial state.\n";
+   help_msg += "save [file]             Save the current state to a file.\n";
+   help_msg += "load [file]             Load the state from a given file.\n";
+   help_msg += "check [file]            Checks state against state described in file.\n"''
    help_msg += "\n";
    help_msg += "You may set registers like so:          PC=100\n";
    help_msg += "You may view register contents like so: PC?\n";
@@ -556,10 +567,10 @@ def print_help():
    help_msg += "You may set memory like so:  m[00A0]=100\n";
    help_msg += "You may view memory like so: m[00A0]? or with a range: m[0:A]?\n";
    help_msg += "\n";
-   help_msg += "Note: All constants are interpreted as hexadecimal.\n";
+   help_msg += "Note: All constants are interpreted as hexadecimal.";
    tran_print(help_msg);
 
-# initalizes the processor
+# initalizes the processor (registers zeroed, state = FETCH)
 def init_p18240():
    global cycle_num;
    cycle_num = 0;
@@ -576,7 +587,7 @@ def init_p18240():
       else:
          state[key] = "0000";
 
-# initalizes the memory
+# initalizes the memory, sets memory locations in list file
 def init_memory():
    global memory;
    memory = {};
@@ -698,25 +709,25 @@ def list_breakpoints():
    for key in breakpoints:
       tran_print(key);
 
-# TODO: Finish
+# Loads state from a given state file (usually made by save). 
 def load(filename):
    tran_print("Loading from " + filename + "...");
    try:
       fh = open(filename, "r");
    except:
       tran_print("Unable to read from " + filename);
+      return;
    lines = fh.readlines();
    lines.pop(0); #removes "Breakpoints"
    line = lines.pop(0);
-   while (len(line) > 0): # breakpoints to add still
+   while (len(line) > 1): # breakpoints to add still
       set_breakpoint(line);
-      line = lines.pop(0);
-   lines.pop(0); # empty line
+      line = lines.pop(0); 
    lines.pop(0); # State:
    values = lines.pop(0).split();
    labels = wide_header.split();
    global state;
-   for i in xrange(len(labels)):
+   for i in xrange(len(labels)): # load register values
       label = labels[i];
       if (label in state):
          state[label] = values[i];
@@ -730,11 +741,11 @@ def load(filename):
       else: # ZNCV register
          flag_num = 0;
          for flag in ["Z", "N", "C", "V"]:
-            state[flag] = value[flag_num];
+            state[flag] = values[i][flag_num];
             flag_num += 1;
    lines.pop(0); # newline
    lines.pop(0); # Memory:
-   while (len(lines) > 0):
+   while (len(lines) > 0): # load memory values
       line = lines.pop(0);
       addr = line[4:8];
       value = line[11:15];
@@ -882,8 +893,8 @@ def check_state(state_file):
    labels = wide_header.split();
    for i in xrange(len(file_state)):
       if (file_state[i].upper() != "XXXX" and file_state[i] != sim_state[i]):
-         tran_print(labels[i] + " does not match:\n sim = " + sim_state[i]
-                         + "\n file = " + file_state[i]);
+         tran_print(labels[i] + " differs: sim = " + sim_state[i]
+                         + ", file = " + file_state[i]);
    lines.pop(0); # removes newline
    lines.pop(0); # removes "Memory:"
    for line in lines:
@@ -891,9 +902,8 @@ def check_state(state_file):
       file_val = line[11:15].upper();
       sim_val = memory[addr][0].upper();
       if (file_val != sim_val):
-         tran_print(file_val + sim_val);
-         tran_print("Memory at " + addr + " differs:\n sim = " + sim_val +
-                            "\n file = " + file_val);
+         tran_print("Mem[" + addr + "] differs: sim = " + sim_val +
+                            ", file = " + file_val);
 
 
 
@@ -954,7 +964,8 @@ def cycle():
 ############# CONTROL PATH CODE ##################
 ##################################################
 
-# gets the micro instruction assocated with a given state
+# gets the micro instruction assocated with a given state,
+# sets next state values that are dependent on flags
 def control():
 
    # python is bad with globals
@@ -980,7 +991,7 @@ def control():
 
    return uinstr;
 
-# Simulates the P18240's ALU. args values are ints, values are returned
+# Simulates the P18240's ALU. Args values are ints, values are returned
 # as strings.
 def alu(args):
    opcode = args["alu_op"];
@@ -1081,7 +1092,7 @@ def memory_sim(args):
 
    return data_out;
 
-# Simulates a multiplexor. The inputs to be selected must be in a dictionary
+# Simulates a multiplexor. The inputs to be selected must be in a dict
 def mux(inputs, sel):
    if (sel == "x"):
       return '0';

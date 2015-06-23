@@ -14,7 +14,7 @@ Commands:
 quit/q/exit => quits the simulator
 help/h/? => prints help text
 reset => resets the simulator (resets state to initial values)
-run/run 5/run 5u/run 5q => runs the simulator. If no arguments are given, 
+run/run 5/run 5u/run 5q => runs the simulator. If no arguments are given,
         the simulator runs until it reaches a STOP instruction or a breakpoint.
         If an argument is given (run [n]), run n instructions. If the argument
         is specified further (5q, 5u), the simulator prints state every
@@ -29,16 +29,20 @@ load [filename] => loads simulator state from a given filename
 check [filename] => checks the current simulator state against the state in
         a given state file, and prints output.
 reg_name = value => sets the value of a given register
-reg_name? => prints the value of a given register. R*? prints the value of 
+reg_name? => prints the value of a given register. R*? prints the value of
         R0-R7, *? prints the value of all registers.
 m[addr]?/mem[addr]? => prints the value held in a given memory address
 m[lo:hi]?/mem[lo:hi]? => prints the values held in memory locations between
         lo and hi, inclusive.
 
--PC option for run
 -More intuitive user options
 -Maybe explain breakpoints to students - in tutorial or otherwise
 -Parsing list file more robust, labels can be longer than 6 characters
--multiple breakpoints per file
--breakpoints at .EQU points, does .EQU get replaced with const. at assemble-time
--Better documentation for test suite
+   => works if line is formatted such that label starts at line[11] and
+        ends at the first space, assembler dependent
+-multiple breakpoints per file => only one per label
+-multiple labels at location => only label at instruction is used
+-breakpoints at .EQU points, .EQU replaced with const. at assemble-time?
+    => label is used in list file, but cannot break to label (as nothing is
+    parsed beyond the label)
+-View labels command?
