@@ -365,7 +365,7 @@ def main():
             line = raw_input();
             if (len(line) > 0): #reading will grab empty lines
                list_lines.append(line);
-         except EOFError: break;
+         except EOFError: break; # no more lines to read
    else:
       if (len(args) < 1): #args takes out flags and argv[0]
          usage();
@@ -384,6 +384,7 @@ def main():
 
    global sim_fh;
    global quit_after_sim_file;
+   global run_only;
    # sim file is optional (read input from STDIN if not specified)
    if (len(args) > 0):
       sim_filename = args.pop(0);
@@ -885,8 +886,8 @@ def fget_memory(args):
    for index in xrange(lo, hi+1):
       addr = ("%.4x" % (index)).upper();
       value = memory[addr][0] if (addr in memory) else "0000";
-
-      if (not (value == "0000" and not print_zeros)):
+      # Value in memory location that we care about
+      if (value != "0000" or print_zeros):
          value_no_regs = "%.4x" % (int(value,16) & 0xffc0);
          state_str = hex_to_state(value_no_regs);
          rd = bs(int(value,16), "5:3");
@@ -909,7 +910,7 @@ def check_state(state_file):
       tran_print("Failed to open state file");
       return;
    lines = fh.readlines();
-   while (not lines[0].startswith("State")):
+   while (not lines[0].startswith("State")): # skipping breakpoints
       lines.pop(0);
    lines.pop(0); # removes "State: line
    file_state = lines.pop(0).split();
@@ -917,8 +918,9 @@ def check_state(state_file):
    labels = wide_header.split();
    dont_care = "^\s*x{1,4}\s*$";
    for i in xrange(len(file_state)):
+      # register isn't a don't care and doesn't match the simulator
       if (not match(dont_care, file_state[i].upper(), IGNORECASE) and 
-                file_state[i] != sim_state[i]):
+                file_state[i] != sim_state[i]): 
          tran_print(labels[i] + " differs: sim = " + sim_state[i]
                          + ", file = " + file_state[i]);
    lines.pop(0); # removes newline
@@ -1001,11 +1003,11 @@ def cycle():
 def control():
 
    # python is bad with globals
-   nextState_logic["DECODE"][7] = hex_to_state(state["IR"]);
-   nextState_logic["BRN"][7] = "BRN2" if int(state["N"]) else "BRN1";
-   nextState_logic["BRZ"][7] = "BRZ2" if int(state["Z"]) else "BRZ1";
-   nextState_logic["BRV"][7] = "BRV2" if int(state["V"]) else "BRV1";
-   nextState_logic["BRC"][7] = "BRC2" if int(state["C"]) else "BRC1";
+   nextState_logic["DECODE"][7] = hex_to_state(state["IR"]); #IR_STATE
+   nextState_logic["BRN"][7] = "BRN2" if int(state["N"]) else "BRN1"; #BRN_NEXT
+   nextState_logic["BRZ"][7] = "BRZ2" if int(state["Z"]) else "BRZ1"; #BRZ_NEXT
+   nextState_logic["BRV"][7] = "BRV2" if int(state["V"]) else "BRV1"; #BRV_NEXT
+   nextState_logic["BRC"][7] = "BRC2" if int(state["C"]) else "BRC1"; #BRC_NEXT
    curr_state = state["STATE"];
 
    output = nextState_logic[curr_state];
