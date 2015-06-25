@@ -11,12 +11,13 @@
 
 from subprocess import check_output;
 
-sim_name = "python_sim240.py";
+sim_name = "sim240";
 test_files = ["gcd", "fibo", "powers", "testRest"];
 for fname in test_files:
 	list_name = fname + "/" + fname + ".list";
 	state_name = fname + "/" + fname + ".state";
-	out = check_output(["python", sim_name, list_name, "-g", state_name]);
+	out = check_output(["python", sim_name, list_name, "-g", state_name,
+                            "-r"]);
 	if (len(out) > 0):
 		print(fname + "failed");
 		print(out);

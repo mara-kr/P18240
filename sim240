@@ -14,9 +14,8 @@ from optparse import OptionParser
 from getpass import getuser
 from datetime import datetime
 import sys
-from sys import argv
-from re import match
-import re
+from sys import argv, dont_write_bytecode
+from re import match, IGNORECASE
 from random import randint
 from string import join
 import signal
@@ -25,10 +24,21 @@ import readline
 # supress .pyc file - speedup doesn't justify cleanup
 sys.dont_write_bytecode = True; 
 
-###############################
-###### TAB COMPLETION #########
-###############################
-commands = ['lables', 'lsbrk', 'quit', 'exit', 'help', 'run', 'reset',
+# Globals
+version = "1.3"
+
+transcript = ""; # holds transcript of every line printed
+
+randomize_memory = False; # flag that randomizes the memory
+run_only = False; # flag that just does "run, quit"
+piping = False;
+create_transcript = False; # flag that creates transcript of events if set
+check_file = ""; # file to check state against in grading mode
+quit_after_sim_file = False; # if -g is set and a sim file is provided,
+                             # we quit after running the sim file
+
+# Tab completion for user input
+commands = ['labels', 'lsbrk', 'quit', 'exit', 'help', 'run', 'reset',
             'step', 'save', 'ustep', 'clear', 'load', 'check', 'break',
             'mem[']
 def complete(text, state):
@@ -41,19 +51,15 @@ def complete(text, state):
 
 readline.parse_and_bind("tab: complete");
 readline.set_completer(complete);
-################################
+# end of tab completion
 
-# Globals
-version = "1.3"
+# Signal handler for SIGINTs
+def sigint_handler(signal, frame):
+   print("\nUnexpected input, did you forget to quit?");
+   exit();
 
-transcript = ""; # holds transcript of every line printed
+signal.signal(signal.SIGINT, sigint_handler);
 
-randomize_memory = False; # flag that randomizes the memory
-run_only = False; # flag that just does "run, quit"
-create_transcript = False; # flag that creates transcript of events if set
-check_file = ""; # file to check state against in grading mode
-quit_after_sim_file = False; # if -g is set and a sim file is provided,
-                             # we quit after running the sim file
 
 wide_header = "Cycle STATE PC   IR   SP   ZNCV MAR  MDR  R0   R1   R2   R3   R4   R5   R6   R7";
 
@@ -346,66 +352,26 @@ nextState_logic = {
 ########################
 
 def main():
-   parser = OptionParser();
-   parser.add_option("-v", "--version", action = "store_true",
-                     dest = "get_version", default = False);
-   parser.add_option("-r", "--run", action = "store_true",
-                     dest = "run_only", default = False);
-   parser.add_option("-n", "--norandom", action = "store_false",
-                     dest = "randomize_memory", default = True);
-   parser.add_option("-t", "--transcript", action = "store_true",
-                     dest = "create_transcript", default = False);
-   parser.add_option("-q", "--quiet", action = "store_true",
-                     dest = "quiet_mode", default = False);
-   parser.add_option("-g", "--grade", default = "", type = "str",
-                     action = "store", dest = "check_file");
-   parser.add_option("-p", "--pipe", default = False,
-                     dest = "pipe", action = "store_true");
-
-   (options, args) = parser.parse_args();
-   if (options.get_version):
-      print("version: " + str(version));
-      exit();
-
-   global run_only;
-   run_only = options.run_only;
-
-   global print_per;
-   if (options.quiet_mode):
-      print_per = "q";
-
-   global check_file;
-   if (options.check_file): #empty string is false
-      check_file = options.check_file;
-      print_per = "q";
-
-   global randomize_memory;
-   randomize_memory = options.randomize_memory;
-
-   global create_transcript;
-   create_transcript = options.create_transcript;
-
-   date = datetime.now();
+   args = parseInput();
 
    tran("User: " + getuser() + "\n");
-   tran("Date: " + date.strftime("%a %b %d %Y %I:%M:%S%p") + "\n");
+   tran("Date: " + datetime.now().strftime("%a %b %d %Y %I:%M:%S%p") + "\n");
    tran("Arguments: " + str(args) + "\n\n");
 
    global list_lines;
-   if (options.pipe): # reading list file from assembler
+   if (piping): # reading list file from assembler
       while(True):
          try:
             line = raw_input();
             if (len(line) > 0): #reading will grab empty lines
                list_lines.append(line);
-         except EOFError:
-            break;
+         except EOFError: break;
    else:
       if (len(args) < 1): #args takes out flags and argv[0]
          usage();
       list_filename = args.pop(0);
       global list_fh;
-      try:
+      try:  
          list_fh = open(list_filename, "r");
       except:
          print("Failed to open list_file");
@@ -438,6 +404,50 @@ def main():
 
    if (sim_fh != None): sim_fh.close();
    if (list_fh != None): list_fh.close();
+
+# parses the user supplied flags and sets globals
+def parseInput():
+   parser = OptionParser();
+   parser.add_option("-v", "--version", action = "store_true",
+                     dest = "get_version", default = False);
+   parser.add_option("-r", "--run", action = "store_true",
+                     dest = "run_only", default = False);
+   parser.add_option("-n", "--norandom", action = "store_false",
+                     dest = "randomize_memory", default = True);
+   parser.add_option("-t", "--transcript", action = "store_true",
+                     dest = "create_transcript", default = False);
+   parser.add_option("-q", "--quiet", action = "store_true",
+                     dest = "quiet_mode", default = False);
+   parser.add_option("-g", "--grade", default = "", type = "str",
+                     action = "store", dest = "check_file");
+   parser.add_option("-p", "--pipe", default = False,
+                     dest = "pipe", action = "store_true");
+
+   (options, args) = parser.parse_args();
+   if (options.get_version):
+      print("version: " + str(version));
+      exit();
+
+   global run_only;
+   run_only = options.run_only;
+
+   global piping;
+   if (options.pipe): piping = True;
+
+   global print_per;
+   if (options.quiet_mode): print_per = "q";
+
+   global check_file;
+   if (options.check_file): #empty string is false
+      check_file = options.check_file;
+      print_per = "q";
+
+   global randomize_memory;
+   randomize_memory = options.randomize_memory;
+
+   global create_transcript;
+   create_transcript = options.create_transcript;
+   return args;
 
 # initalizes the simulator
 def init():
@@ -472,20 +482,17 @@ def get_labels():
 #  * None
 def interface(input_fh):
    done = False; # flag indicating user is done and wants to quit
-   if (input_fh == None):
-      taking_user_input = True;
-   else:
-      taking_user_input = False;
+   
+   taking_user_input = (input_fh == None);
 
    if (run_only):
       run(0, "");
-      if (check_file): # in grading mode
-         check_state(check_file);
+      if (check_file): check_state(check_file); # in grading mode
       done = True;
 
    while (not done):
       tran("> ");
-      if (not taking_user_input):
+      if (not taking_user_input): # we are reading from sim file
           line = input_fh.readline();
           if (len(line) == 0):
             taking_user_input = True;
@@ -496,8 +503,7 @@ def interface(input_fh):
           if (not check_file): #in grading mode
             tran_print(line.rstrip("\n"));
       else:
-         try:
-            line = raw_input("> ");
+         try: line = raw_input("> ");
          except EOFError:
             print("\nUnexpected input, did you forget to quit?");
             exit();
@@ -506,62 +512,61 @@ def interface(input_fh):
       # assume user input is valid until discovered not to be
       valid = True;
       #line = line.upper(); #should be independent of case
-      if (match(menu["quit"], line, re.IGNORECASE)):
+      if (match(menu["quit"], line, IGNORECASE)):
          done = True;
-      elif (match(menu["help"], line, re.IGNORECASE)):
+      elif (match(menu["help"], line, IGNORECASE)):
          print_help();
-      elif (match(menu["reset"], line, re.IGNORECASE)):
+      elif (match(menu["reset"], line, IGNORECASE)):
          init();
-      elif (match(menu["run"], line, re.IGNORECASE)):
-         matchObj = match(menu["run"], line, re.IGNORECASE);
+      elif (match(menu["run"], line, IGNORECASE)):
+         matchObj = match(menu["run"], line, IGNORECASE);
          run(matchObj.group(2), matchObj.group(3));
-      elif (match(menu["step"], line, re.IGNORECASE)):
+      elif (match(menu["step"], line, IGNORECASE)):
          if (print_per == "i"): tran_print(wide_header);
          step();
          if (print_per == "i"): tran_print(get_state());
-      elif (match(menu["ustep"], line, re.IGNORECASE)):
+      elif (match(menu["ustep"], line, IGNORECASE)):
          if (print_per != "q"): tran_print(wide_header);
          cycle();
          if (print_per != "q"): tran_print(get_state());
-      elif (match(menu["break"], line, re.IGNORECASE)):
-         matchObj = match(menu["break"], line, re.IGNORECASE);
+      elif (match(menu["break"], line, IGNORECASE)):
+         matchObj = match(menu["break"], line, IGNORECASE);
          set_breakpoint(matchObj.group(1));
-      elif (match(menu["clear"], line, re.IGNORECASE)):
-         matchObj = match(menu["clear"], line, re.IGNORECASE);
+      elif (match(menu["clear"], line, IGNORECASE)):
+         matchObj = match(menu["clear"], line, IGNORECASE);
          clear_breakpoint(matchObj.group(1));
-      elif (match(menu["lsbrk"], line, re.IGNORECASE)):
+      elif (match(menu["lsbrk"], line, IGNORECASE)):
          list_breakpoints();
-      elif (match(menu["load"], line, re.IGNORECASE)):
-         matchObj = match(menu["load"], line, re.IGNORECASE);
+      elif (match(menu["load"], line, IGNORECASE)):
+         matchObj = match(menu["load"], line, IGNORECASE);
          load(matchObj.group(1));
-      elif (match(menu["save"], line, re.IGNORECASE)):
-         matchObj = match(menu["save"], line, re.IGNORECASE);
+      elif (match(menu["save"], line, IGNORECASE)):
+         matchObj = match(menu["save"], line, IGNORECASE);
          save(matchObj.group(1));
-      elif (match(menu["set_reg"], line, re.IGNORECASE)):
-         matchObj = match(menu["set_reg"], line, re.IGNORECASE);
+      elif (match(menu["set_reg"], line, IGNORECASE)):
+         matchObj = match(menu["set_reg"], line, IGNORECASE);
          set_reg(matchObj.group(1), matchObj.group(2));
-      elif (match(menu["get_reg"], line, re.IGNORECASE)):
-         matchObj = match(menu["get_reg"], line, re.IGNORECASE);
+      elif (match(menu["get_reg"], line, IGNORECASE)):
+         matchObj = match(menu["get_reg"], line, IGNORECASE);
          get_reg(matchObj.group(1));
-      elif (match(menu["set_mem"], line, re.IGNORECASE)):
-         matchObj = match(menu["set_mem"], line, re.IGNORECASE);
+      elif (match(menu["set_mem"], line, IGNORECASE)):
+         matchObj = match(menu["set_mem"], line, IGNORECASE);
          set_memory(matchObj.group(2), matchObj.group(3), 1);
-      elif (match(menu["get_mem"], line, re.IGNORECASE)):
-         matchObj = match(menu["get_mem"], line, re.IGNORECASE);
+      elif (match(menu["get_mem"], line, IGNORECASE)):
+         matchObj = match(menu["get_mem"], line, IGNORECASE);
          fget_memory({"lo" : matchObj.group(2),
                       "hi" : matchObj.group(4)});
-      elif (match(menu["check"], line, re.IGNORECASE)):
-         matchObj = match(menu["check"], line, re.IGNORECASE);
+      elif (match(menu["check"], line, IGNORECASE)):
+         matchObj = match(menu["check"], line, IGNORECASE);
          check_state(matchObj.group(1));
-      elif (match(menu["labels"], line, re.IGNORECASE)):
+      elif (match(menu["labels"], line, IGNORECASE)):
          print_labels();
-      elif (match("^$", line, re.IGNORECASE)): # user just struck enter
+      elif (match("^$", line, IGNORECASE)): # user just struck enter
          pass; # something needs to be here for python
       else:
          valid = False;
 
-      if (not valid):
-         tran_print("Invalid input. Type 'help' for help.");
+      if (not valid): tran_print("Invalid input. Type 'help' for help.");
 
 # prints help message
 def print_help():
@@ -579,7 +584,8 @@ def print_help():
    help_msg += "reset                   Reset the processor to initial state.\n";
    help_msg += "save [file]             Save the current state to a file.\n";
    help_msg += "load [file]             Load the state from a given file.\n";
-   help_msg += "check [file]            Checks state against state described in file.\n"''
+   help_msg += "check [file]            Checks state against state described in file.\n";
+   help_msg ++ "labels                  Prints the lables described in the .list file.\n";
    help_msg += "\n";
    help_msg += "You may set registers like so:          PC=100\n";
    help_msg += "You may view register contents like so: PC?\n";
@@ -602,11 +608,11 @@ def init_p18240():
       if (key == "regFile"):
          for i in xrange(8):
             state["regFile"][i];
-      elif (match("[ZNCV]", key)):
+      elif (match("[ZNCV]", key)): 
          state[key] = "0";
-      elif (key == "STATE"):
+      elif (key == "STATE"): 
          state[key] = "FETCH";
-      else:
+      else: 
          state[key] = "0000";
 
 # initalizes the memory, sets memory locations in list file
@@ -635,18 +641,19 @@ def init_memory():
 # print_per_requested is how often state is printer (per U-instruction,
 # per Instruction, Quiet)
 def run(num, print_per_requested):
-   if (not num): 
-      num = (1<<32);
-   else:
-      num = int(num);
+   num = int(num) if num else (1 << 32); # num = None if not defined
+
    global print_per;
-   print_per_tmp = print_per;
-   if (print_per_requested): print_per = print_per_requested;
-   if (print_per != "q"): tran_print(wide_header);
+   old_print_per = print_per;
+   if (print_per_requested): 
+      print_per = print_per_requested;
+   if (print_per != "q"): 
+      tran_print(wide_header);
 
    for i in xrange(num):
       step();
-      if (print_per == "i"): tran_print(get_state());
+      if (print_per == "i"): 
+         tran_print(get_state());
       if (state["PC"] in breakpoints):
          tran_print("Hit breakpoint at " + state["PC"] + ".\n");
          break;
@@ -654,7 +661,7 @@ def run(num, print_per_requested):
       if (state["STATE"] == "STOP1"):
          break;
 
-   print_per = print_per_tmp;
+   print_per = old_print_per;
 
 # Simulate one instruction
 def step():
@@ -675,7 +682,7 @@ def set_breakpoint(arg):
    if (match("^'(\w+)'$", arg)):
       label = match("^'(\w+)'$", arg).group(1);
       is_label = True;
-   elif (match("^[0-9a-f]{1,4}$", arg, re.IGNORECASE)):
+   elif (match("^[0-9a-f]{1,4}$", arg, IGNORECASE)):
       addr = to_4_digit_uc_hex(int(arg,16));
    else:
       is_label = True;
@@ -699,7 +706,7 @@ def clear_breakpoint(arg):
    if (match("^'(\w+)'$", arg)):
       label = match("^'(\w+)'$", arg).group(1);
       is_label = True;
-   elif (match("^[0-9a-f]{1,4}$", arg, re.IGNORECASE)):
+   elif (match("^[0-9a-f]{1,4}$", arg, IGNORECASE)):
       addr = to_4_digit_uc_hex(int(arg,16));
    elif (arg == "*"):
       clear_all = True;
@@ -801,8 +808,8 @@ def set_reg(reg_name, value):
    global state;
    reg_name = reg_name.upper(); #keys stored as uppercase
    value = to_4_digit_uc_hex(int(value,16));
-   if (match('^R([0-7])$', reg_name, re.IGNORECASE)):
-      matchObj = match('^R([0-7])$', reg_name, re.IGNORECASE);
+   if (match('^R([0-7])$', reg_name, IGNORECASE)):
+      matchObj = match('^R([0-7])$', reg_name, IGNORECASE);
       state["regFile"][int(matchObj.group(1))] = value;
    elif (match("^[ZNCV]$", reg_name)):
       if (match("^[01]$", reg_name)):
@@ -819,8 +826,8 @@ def get_reg(reg_name):
       tran_print(get_state());
    elif (reg_name == "R*"):
       print_regfile();
-   elif (match("R([0-7])", reg_name, re.IGNORECASE)):
-      reg_num = int(match("R([0-7])", reg_name, re.IGNORECASE).group(1));
+   elif (match("R([0-7])", reg_name, IGNORECASE)):
+      reg_num = int(match("R([0-7])", reg_name, IGNORECASE).group(1));
       tran_print("R%d: %s" % (reg_num, state["regFile"][reg_num]));
    else:
       value = state[reg_name];
@@ -841,7 +848,6 @@ def get_state():
 
 # prints the state of R0-R7
 def print_regfile():
-   even = False;
    for index in xrange(0,8,2):
       value = state["regFile"][index];
       reg_str = "R%d: %s \t" % (index, value);
@@ -854,8 +860,7 @@ def print_regfile():
 def set_memory(addr, value, valid):
    addr_hex = to_4_digit_uc_hex(int(addr,16));
    value_hex = to_4_digit_uc_hex(int(value,16));
-   memory[addr_hex] = [value, valid];
-
+   memory[addr_hex] = [value_hex, valid];
 
 # Gets the state of a selection of memory, arguments are passed in a dict
 # get_zeros specifies if zeros will be printed when they are reached
@@ -879,10 +884,8 @@ def fget_memory(args):
 
    for index in xrange(lo, hi+1):
       addr = ("%.4x" % (index)).upper();
-      if (addr in memory):
-         value = memory[addr][0];
-      else:
-         value = "0000";
+      value = memory[addr][0] if (addr in memory) else "0000";
+
       if (not (value == "0000" and not print_zeros)):
          value_no_regs = "%.4x" % (int(value,16) & 0xffc0);
          state_str = hex_to_state(value_no_regs);
@@ -914,7 +917,7 @@ def check_state(state_file):
    labels = wide_header.split();
    dont_care = "^\s*x{1,4}\s*$";
    for i in xrange(len(file_state)):
-      if (not match(dont_care, file_state[i].upper(), re.IGNORECASE) and 
+      if (not match(dont_care, file_state[i].upper(), IGNORECASE) and 
                 file_state[i] != sim_state[i]):
          tran_print(labels[i] + " differs: sim = " + sim_state[i]
                          + ", file = " + file_state[i]);
@@ -1170,10 +1173,8 @@ def hex_to_state(hex_value):
 
    key = bin_val[0:2] + "_" + bin_val[2:6] + "_" + bin_val[6:10];
 
-   if (key in uinst_bin_keys):
-      state = uinst_bin_keys[key];
-   else:
-      state = 'UNDEF';
+   state = uinst_bin_keys[key] if (key in uinst_bin_keys) else "UNDEF";
+
    return state;
 
 # Saves the transcript to transcript.txt
@@ -1192,10 +1193,4 @@ def save_tran():
 def to_4_digit_uc_hex(num):
    return ("%.4x" % num).upper();
 
-# Signal handler for SIGINTs
-def sigint_handler(signal, frame):
-   print("\nUnexpected input, did you forget to quit?");
-   exit();
-
-signal.signal(signal.SIGINT, sigint_handler);
 main();

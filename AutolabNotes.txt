@@ -1,0 +1,22 @@
+AUTOLAB:
+
+baseline:
+-don't release scores until after due date (false release score)
+-No scoreboard
+-possibly create handout files for student to avoid autograding mishaps,
+        (i.e. incorrectly named modules, etc)
+-students submit .tar file (.tar of all .sv/.asm files for that homework)
+        -handout .tar for student with make file?
+        -teach students how to tar?
+-Autograder runs at 5pm on submission day, no late homeworks. Last line
+        of autograder gives scores for problems
+        -autograder is script that runs each .sv/.list file with 
+        testbench/simulator, parses output, and produces score for that
+        problem (could stick with last line convention)
+        -TA's add feedback on written portions and add score to autolab
+        (group by section?) and bulk upload score grouped by problem
+-students recieve scores on autolab the following friday
+-exams, scores bulk graded, each team gets csv to enter into for problem,
+        or just do as normal
+-compute course average for student in gradebook, save students from 
+        computing towards end of semester.
