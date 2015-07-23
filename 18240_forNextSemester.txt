@@ -1,0 +1,3 @@
+-Put assfail in Lab0 handout
+-Restrict individual student space - each handin directory for each student
+	has a limited amount of space
