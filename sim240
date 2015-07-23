@@ -14,10 +14,8 @@ from optparse import OptionParser
 from getpass import getuser
 from datetime import datetime
 import sys
-from sys import argv, dont_write_bytecode
 from re import match, IGNORECASE
 from random import randint
-from string import join
 import signal
 import readline
 
@@ -29,9 +27,9 @@ version = "1.3"
 
 transcript = ""; # holds transcript of every line printed
 
-randomize_memory = False; # flag that randomizes the memory
+randomize_memory = True; # flag that randomizes the memory
 run_only = False; # flag that just does "run, quit"
-piping = False;
+piping = False; # flag that reads list file from STDIN (pipe from as240)
 create_transcript = False; # flag that creates transcript of events if set
 check_file = ""; # file to check state against in grading mode
 quit_after_sim_file = False; # if -g is set and a sim file is provided,
@@ -389,14 +387,14 @@ def main():
    if (len(args) > 0):
       sim_filename = args.pop(0);
       if (check_file):
-         quit_after_sim_file = True;
+         quit_after_sim_file = True; # makes it easier to grade en-masse
       try:
          sim_fh = open(sim_filename, "r");
       except:
          print("Failed to open sim_file\n");
          exit();
-   elif (check_file): 
-      run_only = True; # no simulator file and grading, just run
+   elif (check_file): # no simulator file and grading, just run
+      run_only = True;
 
    init();
 
@@ -432,14 +430,11 @@ def parseInput():
    global run_only;
    run_only = options.run_only;
 
-   global piping;
-   if (options.pipe): piping = True;
-
    global print_per;
    if (options.quiet_mode): print_per = "q";
 
    global check_file;
-   if (options.check_file): #empty string is false
+   if (options.check_file): #empty string (default) is false
       check_file = options.check_file;
       print_per = "q";
 
@@ -448,6 +443,13 @@ def parseInput():
 
    global create_transcript;
    create_transcript = options.create_transcript;
+
+   global piping;
+   piping = options.pipe;
+   if (options.pipe and not (run_only or options.check_file)):
+      print("Must use -r or -g flag when piping!");
+      exit();
+
    return args;
 
 # initalizes the simulator
@@ -484,11 +486,12 @@ def get_labels():
 def interface(input_fh):
    done = False; # flag indicating user is done and wants to quit
    
+   #take user input if reading from stdin
    taking_user_input = (input_fh == None);
 
    if (run_only):
       run(0, "");
-      if (check_file): check_state(check_file); # in grading mode
+      if (check_file): check_state(check_file); # in grading mode, so grade
       done = True;
 
    while (not done):
@@ -628,6 +631,7 @@ def init_memory():
          addr = to_4_digit_uc_hex(addr);
          set_memory(addr, data, 0);
 
+   # memory is zero if not defined in dictionary
    global list_lines;
    for line in list_lines:
       arr = line.split(" ");

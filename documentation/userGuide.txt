@@ -10,6 +10,9 @@ Flags:
         state of the simulator against the given state file (filename), then
         exits. If a simulation file is provided, the simulator will run the
         commands in the simulation file, then check state, then exit.
+-p => piping; reads .list file from STDIN (piped from as240). Must be used
+        either -r or -g (since sim240 will be thrown an EOFError after
+        loading otherwise)
 
 Commands:
 quit/q/exit => quits the simulator
