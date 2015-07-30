@@ -89,8 +89,8 @@ class OpcodeInfo:
                              'op1_type' : 'number',
                              'encoding' : '0010101000' },
                    'CMI' : { 'format' : 'long',
-                             'field1' : 'zero',
-                             'field2' : 'zero',
+                             'field1' : 'op1',
+                             'field2' : 'op1',
                              'field3' : 'op2',
                              'num_operands' : 2,
                              'op1_type' : 'register',
@@ -1089,8 +1089,7 @@ def main():
     file_list.close()
     file_mem.close()
 
+sys.dont_write_bytecode = True;
+
 if __name__ == '__main__':
-    sys.dont_write_bytecode = True;
     main()
-else:
-    sys.dont_write_bytecode = True;

@@ -7,7 +7,7 @@ addr data  label   opcode  operands
 0100 0C00  START   LDI    R0      
 0102 0C09          LDI    R1      
 0103 0001                 $1      
-0104 4400  LOOP    CMI    R1      
+0104 4409  LOOP    CMI    R1      
 0105 000D                 $D      
 0106 2A00          BRZ    DONE    
 0107 010C                 None    
