@@ -10,7 +10,7 @@ addr data  label   opcode  operands
 0102 0C09          LDI     R1 
 0103 0001                  $1 
 0104 4409  loop    CMI     R1 
-0105 000D                  $1 ; was D 
+0105 000D                  $D 
 0106 2A00          BRZ     
 0107 010C                  done 
 0108 0E01          ADD     R0 R1 
