@@ -499,7 +499,7 @@ class AsmLine:
                                        label_or_space,
                                        self.opcode,
                                        formatted_operands)
-        if self.word2:
+        if (self.word2 != None):
             ret_val += "\n"
             ret_val += FORMAT_STRING % (self.mem_address+1,
                                         self.word2,
@@ -839,6 +839,12 @@ class AsmLine:
             self.word1 = int(mach_code, 2)
         if OpcodeInfo.format_is_long(self.opcode):
             self.word2 = self.__assemble_long(self.opcode)
+
+        print(str(self.label) + ' ' + str(self.opcode) + '\n' +
+              str(self.operand1) + ' ' + str(self.operand2) + '\n' +
+              str(self.is_valid) + ' ' + str(self.is_blank) + '\n' +
+              str(self.word1) + ' ' + str(self.word2) + '\n' +
+              str(self.line_number) + ' ' +  str(self.mem_address) + str(self.is_pseudo_operation) + '\n');
 
     def __assemble_register(self, reg_string):
         """ Given a string like R4, return the 3 character binary string
