@@ -1,4 +1,4 @@
-
+            .ORG $0000
 start       LDI R0, $0ADC;
             MOV R2, R0;
             LSHR R2;

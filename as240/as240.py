@@ -474,6 +474,10 @@ class AsmLine:
         Will return a blank string, one or two lines.
         """
         ret_val = ""
+        print(str(self.label) + ' ' + str(self.opcode) + '\n' +
+              str(self.operand1) + ' ' + str(self.operand2) + '\n' +
+              str(self.is_valid) + ' ' + str(self.is_blank) + '\n' +
+              str(self.word1) + ' ' + str(self.word2) + '\n');
         FORMAT_STRING = "%04X %04X  %-5s   %-6s %-8s"
         if not self.is_valid:
             return "Invalid ASM Line"
@@ -491,21 +495,27 @@ class AsmLine:
                                                     self.operand2)
                 elif self.operand1:
                     formatted_operands = self.operand1
+            elif (self.word2 != None and not self.operand2):
+                #operand argument should be on second line (i.e. BRA/JSR)
+                formatted_operands = ""
             else:
                 formatted_operands = self.operand1
-
             ret_val = FORMAT_STRING % (self.mem_address,
                                        self.word1,
                                        label_or_space,
                                        self.opcode,
                                        formatted_operands)
         if (self.word2 != None):
+            if (self.word2 != None and not self.operand2):
+                op2 = self.operand1;
+            else:
+                op2 = self.operand2;
             ret_val += "\n"
             ret_val += FORMAT_STRING % (self.mem_address+1,
                                         self.word2,
                                         " ",
                                         " ",
-                                        self.operand2)
+                                        op2)
         return ret_val
 
     def mem_str(self):
@@ -839,12 +849,6 @@ class AsmLine:
             self.word1 = int(mach_code, 2)
         if OpcodeInfo.format_is_long(self.opcode):
             self.word2 = self.__assemble_long(self.opcode)
-
-        print(str(self.label) + ' ' + str(self.opcode) + '\n' +
-              str(self.operand1) + ' ' + str(self.operand2) + '\n' +
-              str(self.is_valid) + ' ' + str(self.is_blank) + '\n' +
-              str(self.word1) + ' ' + str(self.word2) + '\n' +
-              str(self.line_number) + ' ' +  str(self.mem_address) + str(self.is_pseudo_operation) + '\n');
 
     def __assemble_register(self, reg_string):
         """ Given a string like R4, return the 3 character binary string

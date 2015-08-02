@@ -1,6 +1,6 @@
         .ORG $0000
         LDI R0 $0;
-        LDSP R0; initalize stack
+        LDSP R0 ; initalize stack
         LDI R0, $A; n argument
         LDI R1, $2000; addr argument
         LDI R2, $2; multiple argument
