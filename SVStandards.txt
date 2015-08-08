@@ -1,0 +1,24 @@
+Rule: All simple signals will be of type logic; shared buses are type wire
+Rule: Do not use the reg type.
+Rule: All inputs and outputs to a module must be declared of type logic or wire. 
+Rule: Testbench modules should be named after the item they test, with _tb or _test
+appended. If you have multiple testbench modules for a single component, append an integer
+(i.e. _tb01 or _test04). 
+Rule: Avoid loops (for, while, do, etc) in non-testbench code. 
+Rule: No line should have more than 80 characters in it
+Rule: Use comments for modules and every major code block.
+Rule: Do not use comments for well-named variables, nor for uncomplicated continuous assign
+statements.
+Rule: Comments must communicate the intent of the code. They should never simply document
+what the code is doing. Assume anyone reading your comment is fluent in SystemVerilog.
+Rule: All names (signals and modules) must be written in lowercase ASCII text. Use camelCase
+to distinguish multiple words in the single name. The sole exception are those signal names in a
+top-level synthesis module. For those, you can use capitals to match the pin assignment files.
+Rule: All constants, parameters and enumerated labels must be written in uppercase ASCII text.
+Rule: All active low signals must end with _n, _L or _b. Refrain from using _l, as the letter l
+is visually similar to the number one.
+Rule: User-defined type names end with _t
+Rule: All reset signals must be named reset or reset_n
+Rule: All clock signals must be named clock or clock_n
+Rule: Do NOT name a module mux. Quartus will replace any such module with one from its
+own library causing odd behavior and strange bugs.

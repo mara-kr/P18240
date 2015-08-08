@@ -1,0 +1,23 @@
+Autograder - since SV is an HDL, the "easiest" way to manange problem
+scores is to print lines to STDOUT and parse printed lines with python.
+
+-Lines for the autograder must start with she-bang (#!).
+Standard format - #![keyname, value]
+Values are stored in a dictionary.
+If value is a number, value for <keyname> is set to that value (created
+if it doesn't exist).
+If value is (+=/-= number or +=/-=number - maybe at ++/-- support), 
+the value is incremented/decremented by that amount.
+If value is rm, the value is removed.
+
+-If lines for autograder starts with (#$), the autograder prints it,
+with the (#$) removed from the start.
+
+After python script recieved EOF, it outputs Autolab's JSON line of:
+{ "scores": {"key0":value0, "key1":value1} }
+
+autograde-Makefile:
+tar -mxf autograde.tar
+cp problem.sv handout
+cd handout; make; ./simv -q | ./python-autograder
+(make runs vcs -sverilog -q testbench.sv problem.sv)
