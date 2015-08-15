@@ -474,22 +474,18 @@ class AsmLine:
         Will return a blank string, one or two lines.
         """
         ret_val = ""
-        print(str(self.label) + ' ' + str(self.opcode) + '\n' +
-              str(self.operand1) + ' ' + str(self.operand2) + '\n' +
-              str(self.is_valid) + ' ' + str(self.is_blank) + '\n' +
-              str(self.word1) + ' ' + str(self.word2) + '\n');
         FORMAT_STRING = "%04X %04X  %-5s   %-6s %-8s"
         if not self.is_valid:
             return "Invalid ASM Line"
-        if self.word1:
+        if (self.word1 != None):
             if self.label:
                 label_or_space = self.label
             else:
                 label_or_space = " "
 
             formatted_operands = ""
-            if (self.is_pseudo_operation
-                or not OpcodeInfo.format_is_long(self.opcode)):
+            if (self.is_pseudo_operation or
+                not OpcodeInfo.format_is_long(self.opcode)):
                 if self.operand2:
                     formatted_operands = "%s %s" % (self.operand1,
                                                     self.operand2)
@@ -507,9 +503,9 @@ class AsmLine:
                                        formatted_operands)
         if (self.word2 != None):
             if (self.word2 != None and not self.operand2):
-                op2 = self.operand1;
+                op2 = self.operand1
             else:
-                op2 = self.operand2;
+                op2 = self.operand2
             ret_val += "\n"
             ret_val += FORMAT_STRING % (self.mem_address+1,
                                         self.word2,
@@ -517,6 +513,11 @@ class AsmLine:
                                         " ",
                                         op2)
         return ret_val
+
+    # Comparison function for sorting - we want lower addresses to come first
+    # in .list file
+    def __lt__(self, other):
+        return (self.mem_address < other.mem_address)
 
     def mem_str(self):
         """ Return a printable string for the memory file.
@@ -686,7 +687,11 @@ class AsmLine:
         """
         match = self.re_vallabel.search(label)
         if match:
-            SymbolTable.add_label(label, self.mem_address, self.line_number)
+            if (self.opcode == '.EQU'):
+                addr = int(self.operand1[1:], 16); # Strip $ from constant
+                SymbolTable.add_label(label, addr, self.line_number)
+            else:
+                SymbolTable.add_label(label, self.mem_address, self.line_number)
         else:
             raise SyntaxError(self.line_number, "Invalid label (" + label +
                               ").  Labels may only consist of alphanumeric " +
@@ -1045,7 +1050,7 @@ def parse_command_line():
             file_mem = open('/dev/null', 'w')
     else:
         file_list = open(options.lfile, 'w')
-        file_mem = open(options.mfile, 'w');
+        file_mem = open(options.mfile, 'w')
         if options.sfile :
             file_sym = open(options.sfile, 'w')
         else:
@@ -1085,6 +1090,7 @@ def main():
     print(SymbolTable.printable_string(), file=file_sym)
     file_sym.close()
 
+    code.sort()
     if syntax_errors == 0:
         print("addr data  label   opcode  operands", file=file_list)
         print("---- ----  -----   ------  --------", file=file_list)
@@ -1099,7 +1105,7 @@ def main():
     file_list.close()
     file_mem.close()
 
-sys.dont_write_bytecode = True;
+sys.dont_write_bytecode = True
 
 if __name__ == '__main__':
     main()
